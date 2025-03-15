@@ -1,0 +1,2684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Risk Aquarium Visualization</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+    <!-- Add SheetJS library for Excel parsing -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <style>
+        /* All existing styles remain unchanged */
+        :root {
+            --priority-1-color: #3b82f6; /* Blue */
+            --priority-2-color: #10b981; /* Green */
+            --priority-3-color: #facc15; /* Yellow */
+            --priority-4-color: #f97316; /* Orange */
+            --priority-5-color: #ef4444; /* Red */
+            
+            --velocity-1-color: #93c5fd; /* Light blue */
+            --velocity-2-color: #60a5fa; /* Medium blue */
+            --velocity-3-color: #2563eb; /* Dark blue */
+        }
+
+        body {
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .dark {
+            background-color: #181818;
+            color: #ffffff;
+        }
+
+        .light {
+            background-color: #ffffff;
+            color: #181818;
+        }
+
+        .aquarium {
+            background: linear-gradient(to bottom, rgba(173, 216, 230, 0.2), rgba(0, 0, 128, 0.4));
+            border: 2px solid #5D5CDE;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .aquarium::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 10% 20%, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 20%),
+                radial-gradient(circle at 80% 30%, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 20%);
+            pointer-events: none;
+        }
+
+        /* Add safe zone for zero-risk entities */
+        .safe-zone {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 15%;
+            background: rgba(50, 205, 50, 0.05);
+            border-top: 1px dashed rgba(50, 205, 50, 0.3);
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .safe-zone::before {
+            content: 'Safe Zone (No Risks)';
+            position: absolute;
+            left: 10px;
+            top: 2px;
+            font-size: 10px;
+            color: rgba(50, 205, 50, 0.7);
+        }
+
+        .risk-bubble {
+            position: absolute;
+            transform-origin: center;
+            transition: all 0.5s ease-in-out;
+            cursor: pointer;
+            filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.3));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.1));
+            z-index: 5; /* Base z-index for all bubbles */
+        }
+
+        /* Style for entities with zero risks */
+        .no-risks {
+            opacity: 0.4;
+            border: 1px dashed #888;
+        }
+
+        /* Highlight effect for hovered bubbles */
+        .risk-bubble:hover {
+            z-index: 50; /* Higher z-index when hovered */
+            filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.5));
+            transform: scale(1.05);
+        }
+
+        .fish-id {
+            position: relative;
+            z-index: 2;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 0 3px black;
+            font-size: 10px;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        .time-slider-container {
+            width: calc(100% - 80px);
+            margin-left: 70px;
+            padding: 10px 0;
+        }
+        
+        .org-slider-container {
+            position: relative;
+            width: 70px;
+            margin-right: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+            z-index: 10;
+            border-radius: 8px 0 0 8px;
+        }
+        
+        .horizontal-slider {
+            width: 100%;
+            appearance: none;
+            height: 8px;
+            background: #d3d3d3;
+            outline: none;
+            border-radius: 4px;
+        }
+        
+        .vertical-slider {
+            appearance: none;
+            width: 20px;
+            height: 80%;
+            background: #d3d3d3;
+            outline: none;
+            border-radius: 4px;
+            writing-mode: bt-lr; /* Vertical orientation */
+            -webkit-appearance: slider-vertical;
+            transform: rotate(180deg); /* Fixes the reversal issue */
+        }
+        
+        .dark .org-slider-container {
+            background-color: rgba(40, 40, 50, 0.7);
+            border-color: #444;
+        }
+        
+        .horizontal-slider::-webkit-slider-thumb,
+        .vertical-slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #5D5CDE;
+            cursor: pointer;
+        }
+        
+        .horizontal-slider::-moz-range-thumb,
+        .vertical-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #5D5CDE;
+            cursor: pointer;
+        }
+        
+        .vertical-slider-labels {
+            position: absolute;
+            right: 3px;
+            height: 80%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            padding: 5px 0;
+        }
+        
+        .vertical-slider-labels span {
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        
+        .vertical-slider-labels span:hover {
+            background-color: rgba(93, 92, 222, 0.1);
+        }
+
+        .popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            border: 2px solid #5D5CDE;
+            border-radius: 8px;
+            padding: 20px;
+            max-width: 600px;
+            width: 90%;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .popup-content {
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .dark .popup {
+            background-color: #2d2d2d;
+            color: white;
+        }
+
+        .backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+
+        .tooltip {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            z-index: 100;
+            pointer-events: none;
+            white-space: nowrap;
+            transform: translate(-50%, -100%);
+            top: -10px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .bubbles {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .bubble {
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            animation: bubble-rise linear infinite;
+        }
+
+        @keyframes bubble-rise {
+            0% {
+                transform: translateY(0) translateX(0);
+                opacity: 0.7;
+            }
+            100% {
+                transform: translateY(-100vh) translateX(20px);
+                opacity: 0;
+            }
+        }
+
+        .org-level-label {
+            position: absolute;
+            right: 10px;
+            font-weight: bold;
+            background-color: rgba(93, 92, 222, 0.1);
+            padding: 5px 10px;
+            border-radius: 4px;
+            border-left: 4px solid #5D5CDE;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .fish-id {
+                font-size: 8px;
+            }
+            
+            .controls-container {
+                flex-direction: column;
+            }
+        }
+
+        /* Legend sizing */
+        .legend-container {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.25rem;
+            font-size: 0.75rem;
+            width: calc(100% - 80px);
+            margin-left: 70px;
+            margin-top: 0.5rem;
+        }
+
+        .legend-item {
+            padding: 0.25rem 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 0.25rem;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .legend-title {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            font-size: 0.7rem;
+        }
+
+        .legend-entry {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.125rem;
+        }
+
+        .legend-color {
+            width: 0.6rem;
+            height: 0.6rem;
+            border-radius: 9999px;
+            margin-right: 0.375rem;
+        }
+
+        /* Dark mode toggle */
+        .theme-toggle {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 10;
+            cursor: pointer;
+            background: none;
+            border: none;
+            color: inherit;
+            font-size: 1.2rem;
+        }
+
+        /* Risk details popup */
+        .risk-metrics {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .metric-card {
+            flex: 1;
+            min-width: 120px;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            text-align: center;
+        }
+
+        .dark .metric-card {
+            border-color: #444;
+        }
+
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+
+        .metric-label {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .dark .metric-label {
+            color: #aaa;
+        }
+
+        .trend-container {
+            height: 150px; /* Fixed height for chart */
+            margin-top: 10px;
+        }
+
+        /* Loading indicator */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid white;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .data-status {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            z-index: 10;
+        }
+
+        /* Debug overlay for development */
+        .debug-overlay {
+            position: absolute;
+            top: 40px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            z-index: 100;
+            max-width: 300px;
+            max-height: 200px;
+            overflow: auto;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 transition-colors">
+    <button class="theme-toggle" aria-label="Toggle dark/light mode">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 theme-icon-dark hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 theme-icon-light" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+        </svg>
+    </button>
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-3xl font-bold mb-4 text-center">Risk Aquarium</h1>
+        
+        <div class="mb-4 relative flex">
+            <div class="org-slider-container">
+                <input type="range" min="0" max="4" value="0" class="vertical-slider" id="org-slider">
+                <div class="vertical-slider-labels">
+                    <span id="label-org" onclick="setOrgLevel(0)">Org</span>
+                    <span id="label-div" onclick="setOrgLevel(1)">Div</span>
+                    <span id="label-dept" onclick="setOrgLevel(2)">Dept</span>
+                    <span id="label-bu" onclick="setOrgLevel(3)">BU</span>
+                    <span id="label-risks" onclick="setOrgLevel(4)">Risks</span>
+                </div>
+            </div>
+            <div class="aquarium flex-grow" id="aquarium" style="height: 60vh; width: calc(100% - 80px);">
+                <div class="safe-zone" id="safe-zone"></div>
+                <div class="bubbles" id="bubbles"></div>
+                <div id="org-level-indicator" class="org-level-label">Organization</div>
+                <div id="data-status" class="data-status"></div>
+                <div id="debug-overlay" class="debug-overlay" style="display: none;"></div>
+            </div>
+        </div>
+        
+        <div class="mt-2 controls-container">
+            <div class="time-slider-container">
+                <label for="time-slider" class="block mb-2 font-medium">Time: <span id="time-label">Current</span></label>
+                <input type="range" min="0" max="4" value="4" class="horizontal-slider" id="time-slider">
+                <div class="flex justify-between text-xs mt-1">
+                    <span>4 weeks ago</span>
+                    <span>3 weeks ago</span>
+                    <span>2 weeks ago</span>
+                    <span>1 week ago</span>
+                    <span>Current</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="legend-container">
+            <div class="legend-item">
+                <div class="legend-title">Priority Legend</div>
+                <!-- Reordered to match aquarium - high priority at top, low at bottom -->
+                <div class="legend-entry">
+                    <div class="legend-color" style="background-color: var(--priority-5-color);"></div>
+                    <span>P5 - High</span>
+                </div>
+                <div class="legend-entry">
+                    <div class="legend-color" style="background-color: var(--priority-4-color);"></div>
+                    <span>P4</span>
+                </div>
+                <div class="legend-entry">
+                    <div class="legend-color" style="background-color: var(--priority-3-color);"></div>
+                    <span>P3</span>
+                </div>
+                <div class="legend-entry">
+                    <div class="legend-color" style="background-color: var(--priority-2-color);"></div>
+                    <span>P2</span>
+                </div>
+                <div class="legend-entry">
+                    <div class="legend-color" style="background-color: var(--priority-1-color);"></div>
+                    <span>P1 - Low</span>
+                </div>
+            </div>
+            
+            <div class="legend-item">
+                <div class="legend-title">Velocity Legend</div>
+                <div class="legend-entry">
+                    <div class="legend-color" style="background-color: var(--velocity-3-color);"></div>
+                    <span>V3 - Fast</span>
+                </div>
+                <div class="legend-entry">
+                    <div class="legend-color" style="background-color: var(--velocity-2-color);"></div>
+                    <span>V2</span>
+                </div>
+                <div class="legend-entry">
+                    <div class="legend-color" style="background-color: var(--velocity-1-color);"></div>
+                    <span>V1 - Slow</span>
+                </div>
+            </div>
+            
+            <div class="legend-item">
+                <div class="legend-title">Size Legend</div>
+                <div class="legend-entry">
+                    <div class="legend-color" style="width: 0.9rem; height: 0.9rem; border: 1px solid #ccc;"></div>
+                    <span>Large - High Impact</span>
+                </div>
+                <div class="legend-entry">
+                    <div class="legend-color" style="width: 0.7rem; height: 0.7rem; border: 1px solid #ccc;"></div>
+                    <span>Medium</span>
+                </div>
+                <div class="legend-entry">
+                    <div class="legend-color" style="width: 0.5rem; height: 0.5rem; border: 1px solid #ccc;"></div>
+                    <span>Small - Low Impact</span>
+                </div>
+                <div class="legend-entry mt-2">
+                    <div class="legend-color opacity-40" style="width: 0.7rem; height: 0.7rem; border: 1px dashed #888;"></div>
+                    <span>No Risks</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-4 text-center">
+            <button id="toggle-debug" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded text-sm hover:bg-gray-300 dark:hover:bg-gray-600">Toggle Debug Info</button>
+        </div>
+
+        <!-- Add file upload for cases where direct file access doesn't work -->
+        <div class="mt-4 mx-auto text-center">
+            <h3 class="text-lg font-bold mb-2">Manual File Upload</h3>
+            <p class="text-sm mb-2">If automatic loading fails, upload week files here:</p>
+            <input type="file" id="file-input" accept=".xlsx" multiple class="mb-2">
+            <div id="file-list" class="text-sm"></div>
+        </div>
+    </div>
+
+    <div id="tooltip" class="tooltip"></div>
+
+    <script>
+        // CONFIGURABLE CONSTANTS - SIMPLIFIED
+        const CONFIG = {
+            // Keep only the DEBUG flag, remove unused constants
+            DEBUG: true
+        };
+
+        // Time-indexed data storage - store separate datasets for each time period
+        const timeIndexedData = {
+            0: null, // 4 weeks ago
+            1: null, // 3 weeks ago
+            2: null, // 2 weeks ago
+            3: null, // 1 week ago
+            4: null  // Current
+        };
+
+        // File mapping in reverse order to match logical time flow
+        const weekFiles = ['week_04.xlsx', 'week_03.xlsx', 'week_02.xlsx', 'week_01.xlsx', 'week_00.xlsx'];
+
+        // Current active data (will point to one of the timeIndexedData entries)
+        let data = null;
+        let currentLoadedTimeIndex = null;
+
+        // Track selected entities for drill-down
+        let selectedDivision = null;
+        let selectedDepartment = null;
+        let selectedBU = null;
+
+        // Add a pre-filtering function for future risk filtering feature
+        let activeRiskFilters = null; // Will be populated when filtering is added
+
+        // Debug logging - keep intact for upcoming filtering feature
+        function debugLog(message, data = null) {
+            if (!CONFIG.DEBUG) return;
+            
+            try {
+                const debugOverlay = document.getElementById('debug-overlay');
+                if (!debugOverlay) return; // Safety check
+                
+                const timestamp = new Date().toLocaleTimeString();
+                let logMessage = `<div class="mb-1"><span class="opacity-50">${timestamp}</span> ${message}</div>`;
+                
+                if (data) {
+                    try {
+                        // For objects, stringify them
+                        if (typeof data === 'object') {
+                            const stringified = JSON.stringify(data, null, 2)
+                                .replace(/</g, '&lt;')
+                                .replace(/>/g, '&gt;');
+                            logMessage += `<pre class="text-xs bg-black bg-opacity-50 p-1 my-1 rounded overflow-auto max-h-20">${stringified}</pre>`;
+                        } else {
+                            logMessage += `<pre class="text-xs bg-black bg-opacity-50 p-1 my-1 rounded">${data}</pre>`;
+                        }
+                    } catch (e) {
+                        logMessage += `<div class="text-red-300">[Error displaying data: ${e.message}]</div>`;
+                    }
+                }
+                
+                debugOverlay.innerHTML = logMessage + debugOverlay.innerHTML;
+                
+                // Limit the amount of debug messages to prevent browser slowdown
+                if (debugOverlay.children.length > 20) {
+                    debugOverlay.lastChild.remove();
+                }
+                
+                // Also log to console
+                console.log(message, data);
+            } catch (error) {
+                // Fail silently - debug logging should never break the application
+                console.log("Debug log error:", error);
+            }
+        }
+
+        // Theme detection and toggle
+        const prefersDarkScheme = window.matchMedia("(prefers-color-scheme: dark)");
+        const body = document.body;
+        const themeToggle = document.querySelector(".theme-toggle");
+        const darkIcon = document.querySelector(".theme-icon-dark");
+        const lightIcon = document.querySelector(".theme-icon-light");
+
+        function setTheme(isDark) {
+            if (isDark) {
+                body.classList.add("dark");
+                body.classList.remove("light");
+                darkIcon.classList.remove("hidden");
+                lightIcon.classList.add("hidden");
+            } else {
+                body.classList.add("light");
+                body.classList.remove("dark");
+                darkIcon.classList.add("hidden");
+                lightIcon.classList.remove("hidden");
+            }
+        }
+
+        // Set initial theme based on system preference
+        setTheme(prefersDarkScheme.matches);
+
+        // Toggle theme when button is clicked
+        themeToggle.addEventListener("click", () => {
+            const isDark = body.classList.contains("dark");
+            setTheme(!isDark);
+        });
+
+        // Update theme if system preference changes
+        prefersDarkScheme.addEventListener("change", (e) => {
+            setTheme(e.matches);
+        });
+
+        // Toggle debug overlay
+        document.getElementById('toggle-debug').addEventListener('click', () => {
+            const debugOverlay = document.getElementById('debug-overlay');
+            debugOverlay.style.display = debugOverlay.style.display === 'none' ? 'block' : 'none';
+        });
+
+        // Add file upload handler for manual loading
+        const fileInput = document.getElementById('file-input');
+        const fileList = document.getElementById('file-list');
+        const uploadedFiles = {};
+
+        fileInput.addEventListener('change', function(e) {
+            const files = e.target.files;
+            fileList.innerHTML = '';
+
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    try {
+                        const data = new Uint8Array(event.target.result);
+                        const workbook = XLSX.read(data, {type: 'array'});
+                        
+                        // Store workbook by filename
+                        uploadedFiles[file.name] = workbook;
+                        fileList.innerHTML += `<div>${file.name} - Loaded successfully</div>`;
+                        
+                        // Process the workbook and store it in timeIndexedData
+                        const match = file.name.match(/week_(\d+)\.xlsx/i);
+                        if (match) {
+                            const weekNum = parseInt(match[1]);
+                            // Handle week_00.xlsx for current
+                            if (weekNum === 0) {
+                                const processedData = processExcelWorkbook(workbook);
+                                timeIndexedData[4] = processedData; // Map to "Current" (index 4)
+                                debugLog(`Stored processed data for time index 4 (Current) from ${file.name}`);
+                            } else if (weekNum >= 1 && weekNum <= 4) {
+                                // Calculate the appropriate time index
+                                const timeIndex = 4 - weekNum;
+                                
+                                // Process and store the data for this time index
+                                const processedData = processExcelWorkbook(workbook);
+                                timeIndexedData[timeIndex] = processedData;
+                                debugLog(`Stored processed data for time index ${timeIndex} (${file.name})`);
+                            }
+                            
+                            // If this is the current time index, update the view
+                            const currentTimeIndex = parseInt(document.getElementById('time-slider').value);
+                            if (timeIndexedData[currentTimeIndex]) {
+                                switchToTimeIndex(currentTimeIndex);
+                                updateAquarium();
+                            }
+                        }
+                    } catch (error) {
+                        fileList.innerHTML += `<div class="text-red-500">${file.name} - Error: ${error.message}</div>`;
+                        debugLog(`Error processing uploaded file ${file.name}:`, error);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        });
+
+        // Add common animation function to reduce code duplication
+        function addFloatingAnimation(element) {
+            element.animate([
+                { transform: 'translate(0, 0) scale(1)' },
+                { transform: `translate(${Math.random() > 0.5 ? 5 : -5}px, -5px) scale(1.03)` },
+                { transform: 'translate(0, 0) scale(1)' }
+            ], {
+                duration: 3000 + Math.random() * 2000,
+                iterations: Infinity,
+                easing: 'ease-in-out'
+            });
+        }
+
+        // Parsing functionality
+        function parseFile(workbook) 
+        {
+            const sheets = workbook.Sheets;
+
+            // Determine file format based on the presence of specific fields
+            // const isNewFormat = sheets["Org Structure"] && sheets["Org Structure"][0].ID;
+            // console.info(`Read sheet Org Structure :`);
+
+            var orgSheet = sheets["Org Structure"]; // raw orgSheet object
+            const orgStructure = parseOrgStructure(XLSX.utils.sheet_to_json(orgSheet));
+            console.info(`Org Structure :`, orgStructure);
+
+            // rawSheet = sheets["Risks"]; // raw riskSheet object
+            // console.info("Risks sheet", rawSheet);
+            const risks = parseRisks(XLSX.utils.sheet_to_json(sheets["Risks"]), orgStructure);
+
+            // rawSheet = sheets["Assets"]; // raw riskSheet object
+            // console.info("Assets sheet", rawSheet);
+            const assets = parseAssets(XLSX.utils.sheet_to_json(sheets["Assets"]), orgStructure);
+
+            console.info("Parsed risks:", risks);
+            console.info("Parsed assets:", assets);
+
+            return { orgStructure, risks, assets };
+        } // end of parseFile
+
+        // build Org Structure
+        function buildHierarchy(orgStructure) 
+        {
+            const root = Object.values(orgStructure).find((unit) => unit.Level === 1); // Find the root (organization)
+            if (!root) 
+            {
+                throw new Error('No root organization found in the org structure!');
+            }
+            return root; // Return the root node of the hierarchy tree
+        } // end of buildHierarchy
+
+        function parseOrgStructure(sheet) 
+        {
+            const orgStructure = {};
+
+            // Iterate through rows to build hierarchy
+            sheet.forEach((row) => {
+                const id = String(row.ID).trim(); // Extract ID
+                const parentId = row.Parent_ID || null; // Extract Parent_ID (or null if not provided)
+
+                // Build hierarchy structure
+                if (!orgStructure[id]) 
+                {
+                    orgStructure[id] = { children: [] };
+                }
+
+                orgStructure[id] = { ...orgStructure[id], ...row };
+
+                if (parentId) 
+                {
+                    if (!orgStructure[parentId]) 
+                    {
+                        orgStructure[parentId] = { children: [] };
+                    }
+                    orgStructure[parentId].children.push(orgStructure[id]);
+                }
+            });
+
+            return orgStructure;
+        } // end of parseOrgStructure
+
+        function parseRisks(sheet, orgStructure) 
+        {
+            const risks = [];
+
+            sheet.forEach((row) => 
+            {
+                try 
+                {
+                    // Extract orgUnitId and normalize it
+                    const orgUnitId = row["__EMPTY_3"] ? String(row["__EMPTY_3"]).trim() : null;
+                    console.info("Risks: extracted orgUnitId:", orgUnitId);
+
+                    // Check if orgUnitId is valid and matches orgStructure
+                    if (!orgUnitId) 
+                    {
+                        console.warn("Risks: missing orgUnitId in row:", row);
+                        return; // Skip this row
+                    }
+
+                    const orgUnit = orgStructure[orgUnitId];
+                    if (!orgUnit) 
+                    {
+                        console.warn(`Risks: no matching orgUnit found for orgUnitId: ${orgUnitId}`);
+                        return; // Skip this row
+                    }
+
+                    // console.info("Matching orgUnit in orgStructure:", orgUnit);
+
+                    // Build the risk object
+                    const risk = 
+                    {
+                        id: row["Table 1"],
+                        title: row["__EMPTY"],
+                        description: row["__EMPTY_1"],
+                        type: row["__EMPTY_2"],
+                        orgUnit: orgUnit,
+                        category: row["__EMPTY_4"],
+                        owner: row["__EMPTY_5"],
+                        level: row["__EMPTY_6"],
+                        priority: row["__EMPTY_7"],
+                        velocity: row["__EMPTY_8"],
+                        magnitude: row["__EMPTY_9"],
+                        assetId: row["__EMPTY_10"],
+                        mitigationPlan: row["__EMPTY_11"]
+                    };
+
+                    risks.push(risk);
+                } 
+                catch (error) 
+                {
+                    console.error("Risks: error parsing row:", row, error);
+                }
+            });
+
+            return risks;
+        } // end of parseRisks
+
+        function parseAssets(sheet, orgStructure) 
+        {
+            const assets = [];
+            console.info("Assets sheet: ", sheet);
+
+            sheet.forEach((row) => {
+                try
+                {
+                    // Extract orgUnitId and normalize it
+                    const orgUnitId = row["__EMPTY_1"] ? String(row["__EMPTY_1"]).trim() : null;
+                    console.info("Assets: extracted orgUnitId:", orgUnitId);
+
+                    // Check if orgUnitId is valid and matches orgStructure
+                    if (!orgUnitId) 
+                    {
+                        console.warn("Assets: missing orgUnitId in asset row:", row);
+                        return; // Skip this row
+                    }
+
+                    const orgUnit = orgStructure[orgUnitId];
+                    if (!orgUnit) 
+                    {
+                        console.warn(`Assets: no matching orgUnit found for orgUnitId: ${orgUnitId}`);
+                        return; // Skip this row
+                    }
+
+                    console.info("Assets: matching orgUnit in orgStructure:", orgUnit);
+
+                    const asset = 
+                    {
+                        id: row["Table 1"],
+                        name: row["__EMPTY"],
+                        value: row["__EMPTY_2"],
+                        orgUnit: orgUnit
+                    }
+
+                    assets.push(asset);
+                }
+               catch (error) 
+                {
+                    console.error("Assets: error parsing row:", row, error);
+                }
+            });
+
+            return assets;
+        } // eof parseAssets
+
+        // aggregate risks
+        function aggregateRisks(orgHierarchy, risks) 
+        {
+            const aggregated = {};
+
+            // Recursively process the hierarchy
+            function processUnit(unit) 
+            {
+                const risksForUnit = risks.filter((risk) => risk.orgUnit && risk.orgUnit.id === unit.id);
+
+                // Aggregate risk data for this unit
+                const aggregation = 
+                {
+                    totalMagnitude: risksForUnit.reduce((sum, risk) => sum + risk.magnitude, 0),
+                    highestPriority: Math.max(0, ...risksForUnit.map((risk) => risk.priority)),
+                    fastestVelocity: Math.max(0, ...risksForUnit.map((risk) => risk.velocity)),
+                };
+
+                // Recurse through children
+                unit.children.forEach((child) => 
+                {
+                    const childAggregation = processUnit(child);
+                    aggregation.totalMagnitude += childAggregation.totalMagnitude;
+                    aggregation.highestPriority = Math.max(aggregation.highestPriority, childAggregation.highestPriority);
+                    aggregation.fastestVelocity = Math.max(aggregation.fastestVelocity, childAggregation.fastestVelocity);
+                });
+
+                aggregated[unit.id] = aggregation;
+                return aggregation;
+            }
+
+            processUnit(orgHierarchy); // Start from the root of the hierarchy
+            return aggregated;
+        } // end of aggregateRisks
+
+        // Assets with Org Units association
+        function associateAssetsWithOrgUnits(orgHierarchy, assets) 
+        {
+            const assetsByUnit = {};
+
+            assets.forEach((asset) => 
+            {
+                const unitId = asset.orgUnit?.id;
+                if (unitId) 
+                {
+                    if (!assetsByUnit[unitId]) 
+                    {
+                        assetsByUnit[unitId] = [];
+                    }
+                    assetsByUnit[unitId].push(asset);
+                }
+            });
+
+            return assetsByUnit;
+        } // end of associateAssetsWithOrgUnits
+
+        function updateVisualization(orgHierarchy, riskAggregations, assetsByOrgUnit) 
+        {
+            // Example: Log data for debugging
+            console.log('Organizational Hierarchy:', orgHierarchy);
+            console.log('Risk Aggregations:', riskAggregations);
+            console.log('Assets by Org Unit:', assetsByOrgUnit);
+
+            // TODO: Replace this with your actual visualization update logic
+            // For example:
+            // renderOrgHierarchy(orgHierarchy);
+            // renderRiskData(riskAggregations);
+            // renderAssetData(assetsByOrgUnit);
+        } // end of updateVisualization
+
+        // Parsed data processing 
+        function processParsedData(parsedData) 
+        {
+            const { orgStructure, risks, assets } = parsedData;
+
+            // Step 1: Build organizational hierarchy tree
+            const orgHierarchy = buildHierarchy(orgStructure);
+
+            // Step 2: Aggregate risks by organizational units
+            const riskAggregations = aggregateRisks(orgHierarchy, risks);
+
+            // Step 3: Associate assets with organizational units
+            const assetsByOrgUnit = associateAssetsWithOrgUnits(orgHierarchy, assets);
+
+            // Step 4: Pass processed data to the visualization
+            updateVisualization(orgHierarchy, riskAggregations, assetsByOrgUnit);
+
+            // Optionally return processed data for debugging/testing
+            return { orgHierarchy, riskAggregations, assetsByOrgUnit };
+        } // end of processParsedData
+
+        // Function to load Excel file - improved error handling
+        async function loadExcelFile(timeIndex) 
+        {
+            try {
+                const filename = weekFiles[timeIndex];
+                const dataStatus = document.getElementById('data-status');
+                
+                // Check if we already have this file loaded from the file input
+                if (uploadedFiles[filename]) {
+                    debugLog(`Using uploaded file ${filename} for time index ${timeIndex}`);
+                    dataStatus.textContent = `Data loaded from uploaded: ${filename}`;
+                    return uploadedFiles[filename];
+                }
+                
+                // Check if we already have processed data for this time index
+                if (timeIndexedData[timeIndex]) {
+                    debugLog(`Using already processed data for time index ${timeIndex}`);
+                    dataStatus.textContent = `Using cached data for time period ${timeLabel?.textContent || timeIndex}`;
+                    return null; // Return null to indicate we don't need to process the file
+                }
+                
+                // Show loading state
+                showLoading(true);
+                dataStatus.textContent = `Loading data from ${filename}...`;
+                
+                // Use XMLHttpRequest for best compatibility with binary files
+                const xhr = new XMLHttpRequest();
+                return new Promise((resolve, reject) => 
+                {
+                    xhr.open('GET', `./data/${filename}`, true);
+                    xhr.responseType = 'arraybuffer';
+                    
+                    xhr.onload = function() 
+                    {
+                        if (xhr.status === 200) {
+                            const arraybuffer = xhr.response;
+                            try 
+                            {
+                                // Parse with SheetJS
+                                const data = new Uint8Array(arraybuffer);
+                                const workbook = XLSX.read(data, { type: 'array' });
+                                dataStatus.textContent = `Data loaded from ${filename}`;
+
+                                console.info(`Read workbook :` + timeIndex);
+
+                                // Parse the file
+                                const sheets = parseFile(workbook);
+                                // console.info(`Returned sheets are:` + sheets);
+                                
+                                processParsedData(sheets); // Example function for further processing
+                                console.info(`Parsed sheets :` + timeIndex);
+                                resolve(workbook);
+                            } 
+                            catch (error) 
+                            {
+                                reject(new Error(`Error parsing Excel file: ${error.message}`));
+                            }
+                        } else {
+                            // If we can't find the file, try a fallback or reject
+                            reject(new Error(`HTTP error! Status: ${xhr.status}`));
+                        }
+                    };
+                    
+                    xhr.onerror = function() {
+                        reject(new Error('Network error occurred'));
+                    };
+                    
+                    xhr.send();
+                });
+            } catch (error) {
+                console.error(`Error loading Excel file for time index ${timeIndex}:`, error);
+                document.getElementById('data-status').textContent = `Error loading data: ${error.message}`;
+                showLoading(false);
+                throw error;
+            }
+        } // end of loadExcelFile
+
+        // Process Excel workbook data and convert to our data format
+        function processExcelWorkbook(workbook) {
+            try {
+                const dataStatus = document.getElementById('data-status');
+                const processedData = {
+                    risks: [],
+                    assets: [],
+                    orgStructure: {
+                        organization: "Global Enterprise",
+                        divisions: []
+                    }
+                };
+                
+                // Parse assets sheet
+                if (workbook.SheetNames.includes('Assets')) {
+                    try {
+                        const assetsSheet = workbook.Sheets['Assets'];
+                        // Skip header rows and find the data table
+                        const assets = XLSX.utils.sheet_to_json(assetsSheet, { range: 3 });
+                        processedData.assets = assets;
+                        debugLog("Loaded assets:", assets.length);
+                    } catch (error) {
+                        debugLog("Error parsing Assets sheet:", error);
+                        // Continue processing other sheets
+                    }
+                }
+                
+                // Parse organizational structure - This must be processed BEFORE risks
+                // so that the hierarchy is available for risk processing
+                if (workbook.SheetNames.includes('Organizational Structure')) {
+                    try {
+                        const orgSheet = workbook.Sheets['Organizational Structure'];
+                        // Skip header rows and find the data table
+                        const orgEntities = XLSX.utils.sheet_to_json(orgSheet, { range: 1 });
+                        debugLog("Raw org entities:", orgEntities);
+                        
+                        // Find the organization
+                        const org = orgEntities.find(e => e['Level']?.toLowerCase() === 'organization');
+                        if (org) {
+                            processedData.orgStructure.organization = org['Name'];
+                        }
+                        
+                        // Extract divisions
+                        const divisions = orgEntities.filter(e => e['Level']?.toLowerCase() === 'division');
+                        
+                        // Map divisions - important for the hierarchy
+                        processedData.orgStructure.divisions = divisions.map(div => {
+                            const divName = div['Name'];
+                            
+                            // Find departments in this division
+                            // Use standardized 'Parent' field
+                            const departments = orgEntities.filter(e => 
+                                e['Level']?.toLowerCase() === 'department' && e['Parent'] === divName
+                            );
+                            
+                            const departmentsFormatted = departments.map(dept => {
+                                const deptName = dept['Name'];
+                                
+                                // Find business units in this department
+                                // The key part - filter by BU level and make sure they have this department as parent
+                                const businessUnits = orgEntities.filter(e => 
+                                    e['Level']?.toUpperCase() === 'BU' && 
+                                    e['Parent'] === deptName
+                                ).map(bu => bu['Name']);
+                                
+                                debugLog(`Department ${deptName} has ${businessUnits.length} BUs`);
+                                
+                                return {
+                                    name: deptName,
+                                    businessUnits: businessUnits
+                                };
+                            });
+                            
+                            return {
+                                name: divName,
+                                departments: departmentsFormatted
+                            };
+                        });
+                        
+                        debugLog("Processed organization structure:", 
+                            `1 organization, ${processedData.orgStructure.divisions.length} divisions`);
+                        
+                        // Additional debug for BU counts
+                        const buCounts = processedData.orgStructure.divisions.flatMap(div => 
+                            div.departments.map(dept => `${dept.name}: ${dept.businessUnits.length} BUs`)
+                        );
+                        debugLog("Business unit counts by department:", buCounts);
+                    } catch (error) {
+                        debugLog("Error parsing Organizational Structure sheet:", error);
+                        // Continue processing other sheets
+                    }
+                }
+                
+                // Parse risks sheet
+                if (workbook.SheetNames.includes('Risks')) {
+                    try {
+                        const risksSheet = workbook.Sheets['Risks'];
+                        // Skip header rows and find the data table
+                        const risks = XLSX.utils.sheet_to_json(risksSheet, { range: 1 });
+                        
+                        // Filter out empty rows that might exist in the Excel file
+                        const validRisks = risks.filter(risk => risk['Risk ID'] && risk['Entity']);
+                        
+                        // Transform risk data into our expected format
+                        processedData.risks = validRisks.map(risk => {
+                            // Find associated asset
+                            const asset = processedData.assets.find(a => a['Asset ID'] === risk['Asset ID']);
+                            
+                            // Handle missing values with defaults
+                            const priority = risk['Priority'] !== undefined ? Number(risk['Priority']) : 3;
+                            const velocity = risk['Velocity'] !== undefined ? Number(risk['Velocity']) : 2;
+                            const magnitude = risk['Magnitude'] !== undefined ? Number(risk['Magnitude']) : 3;
+                            
+                            return {
+                                id: risk['Risk ID'],
+                                title: risk['Title'] || `Risk ${risk['Risk ID']}`,
+                                description: risk['Description'] || `Risk affecting ${risk['Entity']}`,
+                                owner: risk['Owner'] || 'Unassigned',
+                                level: risk['Level']?.toLowerCase() || 'unknown',
+                                entity: risk['Entity'],
+                                // Use standardized field names
+                                parentEntity: risk['Parent'],
+                                grandparentEntity: risk['Grandparent'],
+                                category: risk['Category'] || 'Uncategorized',
+                                // For time series, just use same values for all time points
+                                // since each file represents a different time point
+                                timeData: [
+                                    { week: 0, priority, velocity, magnitude },
+                                    { week: 1, priority, velocity, magnitude },
+                                    { week: 2, priority, velocity, magnitude },
+                                    { week: 3, priority, velocity, magnitude },
+                                    { week: 4, priority, velocity, magnitude }
+                                ],
+                                mitigationPlan: risk['Mitigation Plan'] || "No mitigation plan provided",
+                                assetId: risk['Asset ID'],
+                                assetName: asset ? asset['Asset name'] : 'Unknown Asset',
+                                assetOwner: asset ? asset['Asset owner'] : 'Unknown Owner',
+                                assetValue: asset ? Number(asset['Asset value']) : 0
+                            };
+                        });
+                        debugLog("Loaded risks:", processedData.risks.length);
+                    } catch (error) {
+                        debugLog("Error parsing Risks sheet:", error);
+                        // Continue with empty risks array
+                        processedData.risks = [];
+                    }
+                }
+                
+                return processedData;
+            } catch (error) {
+                console.error("Error processing Excel data:", error);
+                document.getElementById('data-status').textContent = `Error processing data: ${error.message}`;
+                return {
+                    risks: [],
+                    assets: [],
+                    orgStructure: {
+                        organization: "Global Enterprise",
+                        divisions: []
+                    }
+                }; // Return empty but valid structure
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Helper function to show/hide loading indicator
+        function showLoading(isLoading) {
+            try {
+                let loadingOverlay = document.querySelector('.loading-overlay');
+                
+                if (isLoading) {
+                    if (!loadingOverlay) {
+                        loadingOverlay = document.createElement('div');
+                        loadingOverlay.className = 'loading-overlay';
+                        
+                        const spinner = document.createElement('div');
+                        spinner.className = 'spinner';
+                        
+                        const text = document.createElement('div');
+                        text.textContent = 'Loading data...';
+                        
+                        loadingOverlay.appendChild(spinner);
+                        loadingOverlay.appendChild(text);
+                        
+                        const aquarium = document.getElementById('aquarium');
+                        if (aquarium) {
+                            aquarium.appendChild(loadingOverlay);
+                        }
+                    }
+                } else if (loadingOverlay) {
+                    loadingOverlay.remove();
+                }
+            } catch (error) {
+                console.error("Error toggling loading indicator:", error);
+                // Fail silently - loading indicator should never break the application
+            }
+        }
+
+        // Initialize UI elements with safety checks
+        const aquarium = document.getElementById('aquarium');
+        const tooltip = document.getElementById('tooltip');
+        const timeSlider = document.getElementById('time-slider');
+        const timeLabel = document.getElementById('time-label');
+        const orgSlider = document.getElementById('org-slider');
+        const orgLevelIndicator = document.getElementById('org-level-indicator');
+        const bubblesContainer = document.getElementById('bubbles');
+        const safeZone = document.getElementById('safe-zone');
+
+        // Add utility function to get risk attributes - useful for future filtering
+        function getRiskAttributes(risk, timeIndex) {
+            if (!risk) return null;
+            
+            try {
+                const timeData = risk.timeData?.[timeIndex] || { 
+                    priority: 3, 
+                    velocity: 2, 
+                    magnitude: 3 
+                };
+                
+                return {
+                    id: risk.id,
+                    title: risk.title,
+                    level: risk.level,
+                    category: risk.category,
+                    entity: risk.entity,
+                    parentEntity: risk.parentEntity,
+                    grandparentEntity: risk.grandparentEntity,
+                    owner: risk.owner,
+                    priority: timeData.priority,
+                    velocity: timeData.velocity,
+                    magnitude: timeData.magnitude,
+                    assetId: risk.assetId,
+                    assetName: risk.assetName,
+                    assetOwner: risk.assetOwner
+                };
+            } catch (error) {
+                debugLog("Error getting risk attributes:", error);
+                return null;
+            }
+        }
+
+        // Utility function to check if a risk is related to a BU
+        function isBURisk(risk, buName, departmentName) {
+            if (!risk || !buName || !departmentName) return false;
+            if (risk.level !== 'bu') return false;
+            if (risk.entity !== departmentName) return false;
+            
+            return (
+                risk.title?.includes(buName) || 
+                (risk.description && risk.description.includes(buName))
+            );
+        }
+
+        // Function for future risk filtering - prepare for upcoming feature
+        function filterRisks(risks, filterCriteria) {
+            if (!risks || !Array.isArray(risks)) return [];
+            if (!filterCriteria) return risks;
+            
+            return risks.filter(risk => {
+                for (const [key, value] of Object.entries(filterCriteria)) {
+                    // Skip undefined criteria
+                    if (value === undefined) continue;
+                    
+                    // Special case for numeric ranges
+                    if (key === 'priorityRange' && value.min !== undefined && value.max !== undefined) {
+                        const priority = getRiskAttributes(risk, currentLoadedTimeIndex)?.priority;
+                        if (priority < value.min || priority > value.max) return false;
+                        continue;
+                    }
+                    
+                    // Special case for text search
+                    if (key === 'textSearch' && value) {
+                        const searchText = value.toLowerCase();
+                        const matchesSearch = 
+                            risk.id?.toLowerCase().includes(searchText) || 
+                            risk.title?.toLowerCase().includes(searchText) || 
+                            risk.description?.toLowerCase().includes(searchText);
+                        if (!matchesSearch) return false;
+                        continue;
+                    }
+                    
+                    // Regular property matching
+                    const riskValue = risk[key];
+                    if (riskValue !== value) return false;
+                }
+                
+                return true;
+            });
+        }
+
+        // Function to group risks by attributes - preparation for upcoming feature
+        function groupRisksByAttribute(risks, attribute) {
+            if (!risks || !Array.isArray(risks)) return {};
+            
+            const groups = {};
+            
+            risks.forEach(risk => {
+                const attrValue = risk[attribute] || 'Unknown';
+                if (!groups[attrValue]) {
+                    groups[attrValue] = [];
+                }
+                groups[attrValue].push(risk);
+            });
+            
+            return groups;
+        }
+
+        // Switch to the data for a specific time index
+        function switchToTimeIndex(timeIndex) {
+            try {
+                if (timeIndexedData[timeIndex]) {
+                    data = timeIndexedData[timeIndex];
+                    currentLoadedTimeIndex = timeIndex;
+                    
+                    // Update time label
+                    if (timeLabel) {
+                        switch(timeIndex) {
+                            case 0: timeLabel.textContent = '4 weeks ago'; break;
+                            case 1: timeLabel.textContent = '3 weeks ago'; break;
+                            case 2: timeLabel.textContent = '2 weeks ago'; break;
+                            case 3: timeLabel.textContent = '1 week ago'; break;
+                            case 4: timeLabel.textContent = 'Current'; break;
+                            default: timeLabel.textContent = `Time ${timeIndex}`;
+                        }
+                    }
+                    
+                    // Update status
+                    const dataStatus = document.getElementById('data-status');
+                    if (dataStatus) {
+                        dataStatus.textContent = 
+                            `Showing data for ${timeLabel?.textContent || timeIndex} (${weekFiles[timeIndex] || 'unknown'})`;
+                    }
+                    
+                    debugLog("Switched to time index", timeIndex);
+                    debugLog("Current data structure", data);
+                    
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                debugLog("Error switching time index:", error);
+                return false;
+            }
+        }
+
+        // Get color based on priority
+        function getPriorityColor(priority) {
+            try {
+                switch(Math.round(priority || 3)) {
+                    case 1: return 'var(--priority-1-color)';
+                    case 2: return 'var(--priority-2-color)';
+                    case 3: return 'var(--priority-3-color)';
+                    case 4: return 'var(--priority-4-color)';
+                    case 5: return 'var(--priority-5-color)';
+                    default: return 'var(--priority-3-color)';
+                }
+            } catch (error) {
+                debugLog("Error getting priority color:", error);
+                return 'var(--priority-3-color)'; // Default fallback
+            }
+        }
+
+        // Create risk bubble element
+        function createRiskBubbleElement(risk, timeIndex) {
+            try {
+                if (!risk) {
+                    debugLog("Warning: Attempted to create bubble for undefined risk");
+                    return null;
+                }
+                
+                const timeData = risk.timeData?.[timeIndex] || { 
+                    priority: 3, 
+                    velocity: 2, 
+                    magnitude: 3 
+                };
+                
+                const priority = timeData.priority;
+                const velocity = timeData.velocity;
+                const magnitude = timeData.magnitude;
+                
+                const bubbleElement = document.createElement('div');
+                bubbleElement.classList.add('risk-bubble');
+                bubbleElement.dataset.id = risk.id;
+                
+                // Set size based on magnitude (1-5)
+                const baseSize = 40; // base size in pixels
+                const size = baseSize + (magnitude - 1) * 15; // scale size based on magnitude
+                bubbleElement.style.width = `${size}px`;
+                bubbleElement.style.height = `${size}px`;
+                
+                // Set position based on priority (vertical) and velocity (horizontal)
+                // Higher priority bubbles should be higher in the aquarium
+                // Higher velocity bubbles should be more to the right
+                
+                // Create vertical position based on priority (5 = highest, 1 = lowest)
+                // Add some randomness to prevent exact alignment
+                const verticalPosition = 85 - ((priority - 1) * 15 + Math.random() * 5);
+                bubbleElement.style.top = `${verticalPosition}%`;
+                
+                // Create horizontal position based on velocity (3 = rightmost, 1 = leftmost)
+                // Add some randomness to prevent exact alignment
+                const horizontalPosition = ((velocity - 1) * 30 + Math.random() * 10);
+                bubbleElement.style.left = `${horizontalPosition}%`;
+                
+                // Set color based on priority
+                const color = getPriorityColor(priority);
+                bubbleElement.style.backgroundColor = color;
+                
+                // Add risk ID
+                const riskId = document.createElement('div');
+                riskId.classList.add('fish-id'); // Keeping the class name for simplicity
+                riskId.textContent = risk.id;
+                bubbleElement.appendChild(riskId);
+                
+                // Add floating animation (consolidated into a shared function)
+                addFloatingAnimation(bubbleElement);
+                
+                // Add tooltip on hover
+                bubbleElement.addEventListener('mouseenter', (e) => {
+                    if (!tooltip) return;
+                    
+                    tooltip.innerHTML = `
+                        <strong>${risk.id}</strong><br>
+                        Magnitude: ${magnitude.toFixed(1)}<br>
+                        Priority: P${Math.round(priority)}<br>
+                        Velocity: V${Math.round(velocity)}<br>
+                        Asset: ${risk.assetName || 'N/A'}
+                    `;
+                    
+                    const rect = bubbleElement.getBoundingClientRect();
+                    tooltip.style.left = `${rect.left + rect.width/2}px`;
+                    tooltip.style.top = `${rect.top}px`;
+                    tooltip.style.opacity = '1';
+                });
+                
+                bubbleElement.addEventListener('mouseleave', () => {
+                    if (!tooltip) return;
+                    tooltip.style.opacity = '0';
+                });
+                
+                // Add click to show details popup
+                bubbleElement.addEventListener('click', () => {
+                    showRiskDetails(risk, timeIndex);
+                });
+                
+                return bubbleElement;
+            } catch (error) {
+                debugLog("Error creating risk bubble:", error);
+                return null;
+            }
+        }
+
+        // Create decorative bubbles
+        function createBubbles() {
+            try {
+                if (!bubblesContainer) return;
+                
+                bubblesContainer.innerHTML = '';
+                const bubbleCount = 15;
+                
+                for (let i = 0; i < bubbleCount; i++) {
+                    const bubble = document.createElement('div');
+                    bubble.classList.add('bubble');
+                    
+                    // Random size between 5px and 20px
+                    const size = 5 + Math.random() * 15;
+                    bubble.style.width = `${size}px`;
+                    bubble.style.height = `${size}px`;
+                    
+                    // Random horizontal position
+                    const left = Math.random() * 100;
+                    bubble.style.left = `${left}%`;
+                    
+                    // Random start position vertically (some below the viewport)
+                    const bottom = -20 + Math.random() * 100;
+                    bubble.style.bottom = `${bottom}%`;
+                    
+                    // Random animation duration between 10s and 30s
+                    const duration = 10 + Math.random() * 20;
+                    bubble.style.animationDuration = `${duration}s`;
+                    
+                    // Random delay so they don't all start at the same time
+                    const delay = Math.random() * 15;
+                    bubble.style.animationDelay = `${delay}s`;
+                    
+                    bubblesContainer.appendChild(bubble);
+                }
+            } catch (error) {
+                debugLog("Error creating decorative bubbles:", error);
+                // Continue without decorative bubbles
+            }
+        }
+
+        // Show risk details in popup
+        function showRiskDetails(risk, timeIndex) {
+            try {
+                if (!risk) {
+                    debugLog("Warning: Attempted to show details for undefined risk");
+                    return;
+                }
+                
+                // Remove existing popup if any
+                const existingPopup = document.querySelector('.popup');
+                const existingBackdrop = document.querySelector('.backdrop');
+                
+                if (existingPopup) {
+                    existingPopup.remove();
+                }
+                
+                if (existingBackdrop) {
+                    existingBackdrop.remove();
+                }
+                
+                // Create backdrop
+                const backdrop = document.createElement('div');
+                backdrop.classList.add('backdrop');
+                document.body.appendChild(backdrop);
+                
+                // Create popup
+                const popup = document.createElement('div');
+                popup.classList.add('popup');
+                
+                const timeData = risk.timeData?.[timeIndex] || { 
+                    priority: 3, 
+                    velocity: 2, 
+                    magnitude: 3 
+                };
+                
+                const priority = timeData.priority;
+                const velocity = timeData.velocity;
+                const magnitude = timeData.magnitude;
+                
+                // Create popup content - revised for better visibility and includes asset information
+                popup.innerHTML = `
+                    <div class="popup-content">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold">${risk.id}: ${risk.title}</h2>
+                            <button class="close-popup text-gray-500 hover:text-gray-700">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        
+                        <div>
+                            <p class="mb-2"><strong>Description:</strong> ${risk.description || 'No description provided'}</p>
+                            <p class="mb-2"><strong>Category:</strong> ${risk.category || 'Uncategorized'}</p>
+                            <p class="mb-2"><strong>Owner:</strong> ${risk.owner || 'Unassigned'}</p>
+                            <p class="mb-2"><strong>Organization Level:</strong> ${risk.level || 'Unknown'} (${risk.entity || 'Unknown entity'})</p>
+                            <p class="mb-2"><strong>Affected Asset:</strong> ${risk.assetName || 'N/A'}</p>
+                            <p class="mb-2"><strong>Asset Owner:</strong> ${risk.assetOwner || 'N/A'}</p>
+                            <p class="mb-2"><strong>Asset Value:</strong> ${risk.assetValue ? ('$' + risk.assetValue.toLocaleString()) : 'N/A'}</p>
+                            <p class="mb-2"><strong>Mitigation Plan:</strong> ${risk.mitigationPlan || 'No mitigation plan provided'}</p>
+                        </div>
+                        
+                        <!-- Metrics display without scrolling -->
+                        <div class="risk-metrics mt-4">
+                            <div class="metric-card" style="border-left: 4px solid ${getPriorityColor(priority)};">
+                                <div class="metric-label">Priority</div>
+                                <div class="metric-value">P${Math.round(priority)}</div>
+                                <div class="metric-label">${['Very Low', 'Low', 'Medium', 'High', 'Very High'][Math.round(priority)-1] || 'Medium'}</div>
+                            </div>
+                            
+                            <div class="metric-card" style="border-left: 4px solid var(--velocity-${Math.round(velocity)}-color);">
+                                <div class="metric-label">Velocity</div>
+                                <div class="metric-value">V${Math.round(velocity)}</div>
+                                <div class="metric-label">${['Slow', 'Medium', 'Fast'][Math.round(velocity)-1] || 'Medium'}</div>
+                            </div>
+                            
+                            <div class="metric-card">
+                                <div class="metric-label">Magnitude</div>
+                                <div class="metric-value">${magnitude.toFixed(1)}</div>
+                                <div class="metric-label">${['Very Low', 'Low', 'Medium', 'High', 'Very High'][Math.round(magnitude)-1] || 'Medium'}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <h3 class="font-medium mb-2">Historical Trend</h3>
+                            <div class="trend-container">
+                                <canvas id="trendChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(popup);
+                
+                // Close popup when clicking the close button
+                const closeButton = popup.querySelector('.close-popup');
+                if (closeButton) {
+                    closeButton.addEventListener('click', () => {
+                        popup.remove();
+                        backdrop.remove();
+                    });
+                }
+                
+                // Close popup when clicking backdrop
+                backdrop.addEventListener('click', () => {
+                    popup.remove();
+                    backdrop.remove();
+                });
+                
+                // Close popup when pressing Escape key
+                document.addEventListener('keydown', function closeOnEscape(e) {
+                    if (e.key === 'Escape') {
+                        popup.remove();
+                        backdrop.remove();
+                        document.removeEventListener('keydown', closeOnEscape);
+                    }
+                });
+                
+                // Create trend chart with fixed height
+                const ctx = document.getElementById('trendChart')?.getContext('2d');
+                if (ctx) {
+                    try {
+                        new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: ['4 weeks ago', '3 weeks ago', '2 weeks ago', '1 week ago', 'Current'],
+                                datasets: [
+                                    {
+                                        label: 'Priority',
+                                        data: risk.timeData?.map(d => d?.priority) || [3, 3, 3, 3, 3],
+                                        borderColor: 'rgb(255, 99, 132)',
+                                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                                        fill: false,
+                                        tension: 0.1
+                                    },
+                                    {
+                                        label: 'Velocity',
+                                        data: risk.timeData?.map(d => d?.velocity) || [2, 2, 2, 2, 2],
+                                        borderColor: 'rgb(54, 162, 235)',
+                                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                                        fill: false,
+                                        tension: 0.1
+                                    },
+                                    {
+                                        label: 'Magnitude',
+                                        data: risk.timeData?.map(d => d?.magnitude) || [3, 3, 3, 3, 3],
+                                        borderColor: 'rgb(255, 159, 64)',
+                                        backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                                        fill: false,
+                                        tension: 0.1
+                                    }
+                                ]
+                            },
+                            options: {
+                                scales: {
+                                    y: {
+                                        beginAtZero: false,
+                                        min: 1,
+                                        max: 5,
+                                        ticks: {
+                                            stepSize: 1
+                                        }
+                                    }
+                                },
+                                responsive: true,
+                                maintainAspectRatio: false
+                            }
+                        });
+                    } catch (chartError) {
+                        debugLog("Error creating trend chart:", chartError);
+                        // Continue without chart
+                    }
+                }
+            } catch (error) {
+                debugLog("Error showing risk details:", error);
+                // If we can't show the popup, at least log the error
+            }
+        }
+
+        // Calculate aggregated risk metrics for an organization entity
+        function calculateAggregatedRiskMetrics(entityType, entityName, parentEntityName, timeIndex) {
+            try {
+                // Safety check for data
+                if (!data || !data.risks || !Array.isArray(data.risks)) {
+                    debugLog(`Warning: No valid risk data available for ${entityType}: ${entityName}`);
+                    return {
+                        priority: 1,
+                        velocity: 1,
+                        magnitude: 1,
+                        count: 0
+                    };
+                }
+                
+                let entityRisks = [];
+                
+                // Convert entityType to lowercase for case-insensitive comparison
+                const type = (entityType || '').toLowerCase();
+                
+                // Debug which entity we're calculating metrics for
+                debugLog(`Calculating metrics for ${type}: ${entityName}${parentEntityName ? ` in ${parentEntityName}` : ''}`);
+                
+                // The critical part that needs fixing: BU risks have BU level but department entity
+                if (type === 'organization') {
+                    // For the main organization, include ALL risks across all levels
+                    entityRisks = data.risks;
+                } else if (type === 'division') {
+                    // For divisions, look at:
+                    // 1. Risk's entity (direct match)
+                    // 2. Risk's parentEntity (BU or Dept risk rolling up to Division)
+                    // 3. Risk's grandparentEntity (BU risk might have Division in grandparent)
+                    entityRisks = data.risks.filter(risk => {
+                        return (
+                            // Direct match on entity name
+                            (risk.entity === entityName) ||
+                            // Division is parent of a dept/BU where risk exists
+                            (risk.parentEntity === entityName) ||
+                            // Division is grandparent of a BU where risk exists
+                            (risk.grandparentEntity === entityName)
+                        );
+                    });
+                } else if (type === 'department') {
+                    // For departments, look at:
+                    // 1. Risk's entity (direct match)
+                    // 2. Risk's parentEntity (BU risk rolls up to Dept)
+                    // 3. BU-level risks where risk.entity is the department name
+                    entityRisks = data.risks.filter(risk => {
+                        return (
+                            // Direct match (risk is on this department)
+                            (risk.entity === entityName) ||
+                            // Department is parent of BU where risk exists
+                            (risk.parentEntity === entityName) ||
+                            // This is the key change: BU-level risks with this department in entity field
+                            (risk.level === 'bu' && risk.entity === entityName)
+                        );
+                    });
+                } else if (type === 'businessunit' || type === 'bu') {
+                    // For BUs, we need to look at:
+                    // 1. BU-level risks that have this BU's department as entity
+                    // 2. BU name in the title or description
+                    entityRisks = data.risks.filter(risk => 
+                        isBURisk(risk, entityName, parentEntityName)
+                    );
+                }
+                
+                // Apply any active filters (preparation for future filtering feature)
+                if (activeRiskFilters) {
+                    entityRisks = filterRisks(entityRisks, activeRiskFilters);
+                }
+                
+                // Log what we found
+                debugLog(`Risk count for ${entityName}: ${entityRisks.length}`, 
+                    entityRisks.map(r => r.id));
+                
+                // If no risks found, return default values with count 0
+                if (entityRisks.length === 0) {
+                    debugLog(`No risks found for ${type}: ${entityName}`);
+                    return {
+                        priority: 1,
+                        velocity: 1,
+                        magnitude: 1,
+                        count: 0
+                    };
+                }
+                
+                // Calculate aggregated metrics
+                let totalPriority = 0;
+                let totalVelocity = 0;
+                let totalMagnitude = 0;
+                
+                entityRisks.forEach(risk => {
+                    // Use safe access with defaults
+                    const timeData = risk.timeData?.[timeIndex] || { 
+                        priority: 3, 
+                        velocity: 2, 
+                        magnitude: 3 
+                    };
+                    
+                    totalPriority += timeData.priority;
+                    totalVelocity += timeData.velocity;
+                    totalMagnitude += timeData.magnitude;
+                });
+                
+                const metrics = {
+                    priority: totalPriority / entityRisks.length,
+                    velocity: totalVelocity / entityRisks.length,
+                    magnitude: totalMagnitude / entityRisks.length,
+                    count: entityRisks.length
+                };
+                
+                debugLog(`Metrics for ${type} ${entityName}: count=${metrics.count}, priority=${metrics.priority.toFixed(1)}, velocity=${metrics.velocity.toFixed(1)}`);
+                
+                return metrics;
+            } catch (error) {
+                debugLog(`Error calculating metrics for ${entityType}: ${entityName}`, error);
+                return {
+                    priority: 1,
+                    velocity: 1,
+                    magnitude: 1,
+                    count: 0
+                };
+            }
+        }
+        
+        // Create an entity bubble (org, division, department, or BU)
+        function createEntityBubble(entityType, entityName, parentEntityName, grandparentEntityName, metrics, timeIndex) {
+            try {
+                // Debug the entity we're creating
+                debugLog(`Creating ${entityType} bubble: ${entityName}`);
+                
+                // Safety checks
+                if (!entityType || !entityName || !metrics) {
+                    debugLog("Warning: Missing required parameters for entity bubble");
+                    return null;
+                }
+                
+                const bubble = document.createElement('div');
+                bubble.classList.add('risk-bubble');
+                bubble.dataset.type = entityType.toLowerCase();
+                bubble.dataset.name = entityName;
+                
+                // Check if entity has no risks and apply appropriate styling
+                const hasNoRisks = metrics.count === 0;
+                if (hasNoRisks) {
+                    bubble.classList.add('no-risks');
+                    debugLog(`Entity ${entityName} has no risks`);
+                }
+                
+                // Set size based on magnitude and number of risks
+                const baseSize = 50;
+                const size = hasNoRisks ? baseSize : baseSize + (metrics.magnitude - 1) * 10 + Math.min(metrics.count * 3, 30);
+                bubble.style.width = `${size}px`;
+                bubble.style.height = `${size}px`;
+                
+                // Position zero-risk entities in the safe zone at the bottom in a horizontal grid
+                // Position entities with risks based on priority and velocity
+                if (hasNoRisks) {
+                    // Get a consistent index for this entity, based on entity name
+                    // Using checksum-like approach for consistency between renders
+                    let entityIndex = 0;
+                    for (let i = 0; i < entityName.length; i++) {
+                        entityIndex += entityName.charCodeAt(i);
+                    }
+                    entityIndex = entityIndex % 10; // 0-9 range
+                    
+                    // Put all no-risk entities at the center bottom in a grid
+                    // with minimal horizontal spread
+                    const safeZoneHeight = 15; // The height of the safe zone
+                    const verticalPosition = 100 - safeZoneHeight/2; // Vertically centered in safe zone
+                    
+                    // For horizontal position, create a grid in the middle 60% of the aquarium
+                    // This keeps all zero-risk entities in a central cluster at the bottom
+                    const column = entityIndex % 5; // 0-4
+                    const row = Math.floor(entityIndex / 5); // 0-1
+                    
+                    // Center the grid (20% to 80% horizontal range)
+                    const horizontalPosition = 20 + (column * 12) + (row * 6);
+                    
+                    bubble.style.top = `${verticalPosition}%`;
+                    bubble.style.left = `${horizontalPosition}%`;
+                } else {
+                    // Normal positioning for entities with risks
+                    const verticalPosition = 85 - ((metrics.priority - 1) * 15 + Math.random() * 5);
+                    bubble.style.top = `${verticalPosition}%`;
+                    
+                    const horizontalPosition = ((metrics.velocity - 1) * 30 + Math.random() * 10);
+                    bubble.style.left = `${horizontalPosition}%`;
+                }
+                
+                // Set color based on priority (default gray for no risks)
+                const color = hasNoRisks ? '#888888' : getPriorityColor(metrics.priority);
+                bubble.style.backgroundColor = color;
+                
+                // Add entity name
+                const nameElement = document.createElement('div');
+                nameElement.classList.add('fish-id');
+                nameElement.textContent = entityName.length > 15 ? entityName.substring(0, 12) + '...' : entityName;
+                bubble.appendChild(nameElement);
+                
+                // Add tooltip on hover
+                bubble.addEventListener('mouseenter', () => {
+                    if (!tooltip) return;
+                    
+                    if (hasNoRisks) {
+                        tooltip.innerHTML = `
+                            <strong>${entityName}</strong><br>
+                            No risks associated with this ${entityType}
+                        `;
+                    } else {
+                        tooltip.innerHTML = `
+                            <strong>${entityName}</strong><br>
+                            ${metrics.count} Risk${metrics.count !== 1 ? 's' : ''}<br>
+                            Avg. Magnitude: ${metrics.magnitude.toFixed(1)}<br>
+                            Avg. Priority: ${metrics.priority.toFixed(1)}<br>
+                            Avg. Velocity: ${metrics.velocity.toFixed(1)}
+                        `;
+                    }
+                    
+                    const rect = bubble.getBoundingClientRect();
+                    tooltip.style.left = `${rect.left + rect.width/2}px`;
+                    tooltip.style.top = `${rect.top}px`;
+                    tooltip.style.opacity = '1';
+                });
+                
+                bubble.addEventListener('mouseleave', () => {
+                    if (!tooltip) return;
+                    tooltip.style.opacity = '0';
+                });
+                
+                // Add floating animation (consolidated into a shared function)
+                addFloatingAnimation(bubble);
+                
+                // Add click handler for drill-down if applicable
+                bubble.addEventListener('click', () => {
+                    if (entityType.toLowerCase() === 'organization') {
+                        // When clicking the organization, show all divisions
+                        debugLog("Org bubble clicked - showing divisions");
+                        setOrgLevel(1);
+                    } else if (entityType.toLowerCase() === 'division') {
+                        // When clicking a division, filter to show only departments in that division
+                        debugLog(`Division ${entityName} clicked - showing its departments`);
+                        selectedDivision = entityName;
+                        selectedDepartment = null;
+                        selectedBU = null;
+                        setOrgLevel(2);
+                    } else if (entityType.toLowerCase() === 'department') {
+                        // When clicking a department, filter to show only BUs in that department
+                        debugLog(`Department ${entityName} clicked - showing its BUs`);
+                        selectedDepartment = entityName;
+                        selectedDivision = parentEntityName;
+                        selectedBU = null;
+                        setOrgLevel(3);
+                    } else if (entityType.toLowerCase() === 'businessunit' || entityType.toLowerCase() === 'bu') {
+                        // When clicking a BU, filter to show its risks
+                        debugLog(`BU ${entityName} clicked - showing its risks`);
+                        selectedBU = entityName;
+                        selectedDepartment = parentEntityName;
+                        selectedDivision = grandparentEntityName;
+                        // First show entity details, and give an option to see individual risks
+                        showEntityDetails(entityType, entityName, parentEntityName, grandparentEntityName, metrics, timeIndex);
+                    }
+                });
+                
+                return bubble;
+            } catch (error) {
+                debugLog(`Error creating entity bubble for ${entityType}: ${entityName}`, error);
+                return null;
+            }
+        }
+        
+        // Show entity details in a popup
+        function showEntityDetails(entityType, entityName, parentEntityName, grandparentEntityName, metrics, timeIndex) {
+            try {
+                // Safety checks
+                if (!entityType || !entityName) {
+                    debugLog("Warning: Missing required parameters for entity details");
+                    return;
+                }
+                
+                // Remove existing popup if any
+                const existingPopup = document.querySelector('.popup');
+                const existingBackdrop = document.querySelector('.backdrop');
+                
+                if (existingPopup) {
+                    existingPopup.remove();
+                }
+                
+                if (existingBackdrop) {
+                    existingBackdrop.remove();
+                }
+                
+                // Create backdrop
+                const backdrop = document.createElement('div');
+                backdrop.classList.add('backdrop');
+                document.body.appendChild(backdrop);
+                
+                // Create popup
+                const popup = document.createElement('div');
+                popup.classList.add('popup');
+                
+                // Get risks for this entity - use the same logic as calculateAggregatedRiskMetrics
+                const type = (entityType || '').toLowerCase();
+                let entityRisks = [];
+                
+                if (!data || !data.risks) {
+                    entityRisks = [];
+                } else if (type === 'organization') {
+                    entityRisks = data.risks;
+                } else if (type === 'division') {
+                    entityRisks = data.risks.filter(risk => {
+                        return (
+                            (risk.entity === entityName) ||
+                            (risk.parentEntity === entityName) ||
+                            (risk.grandparentEntity === entityName)
+                        );
+                    });
+                } else if (type === 'department') {
+                    entityRisks = data.risks.filter(risk => {
+                        return (
+                            (risk.entity === entityName) ||
+                            (risk.parentEntity === entityName) ||
+                            (risk.level === 'bu' && risk.entity === entityName)
+                        );
+                    });
+                } else if (type === 'businessunit' || type === 'bu') {
+                    entityRisks = data.risks.filter(risk => 
+                        isBURisk(risk, entityName, parentEntityName)
+                    );
+                }
+                
+                // Apply any active filters (preparation for future filtering feature)
+                if (activeRiskFilters) {
+                    entityRisks = filterRisks(entityRisks, activeRiskFilters);
+                }
+                
+                // Create popup content
+                let hierarchyText = entityName;
+                if (parentEntityName) hierarchyText += ` in ${parentEntityName}`;
+                if (grandparentEntityName) hierarchyText += `, ${grandparentEntityName}`;
+                
+                // For entities with no risks, show a special message
+                const hasNoRisks = !entityRisks || entityRisks.length === 0;
+                
+                popup.innerHTML = `
+                    <div class="popup-content">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold">${entityType.charAt(0).toUpperCase() + entityType.slice(1)}: ${hierarchyText}</h2>
+                            <button class="close-popup text-gray-500 hover:text-gray-700">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        
+                        ${hasNoRisks ? `
+                            <div class="p-6 text-center">
+                                <div class="mb-4 text-gray-500 dark:text-gray-400">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <p class="text-lg">No risks are currently associated with this ${entityType}.</p>
+                                </div>
+                            </div>
+                        ` : `
+                            <div class="risk-metrics mb-4">
+                                <div class="metric-card" style="border-left: 4px solid ${getPriorityColor(metrics.priority)};">
+                                    <div class="metric-label">Avg Priority</div>
+                                    <div class="metric-value">${metrics.priority.toFixed(1)}</div>
+                                </div>
+                                
+                                <div class="metric-card" style="border-left: 4px solid var(--velocity-${Math.round(metrics.velocity)}-color);">
+                                    <div class="metric-label">Avg Velocity</div>
+                                    <div class="metric-value">${metrics.velocity.toFixed(1)}</div>
+                                </div>
+                                
+                                <div class="metric-card">
+                                    <div class="metric-label">Avg Magnitude</div>
+                                    <div class="metric-value">${metrics.magnitude.toFixed(1)}</div>
+                                </div>
+                                
+                                <div class="metric-card">
+                                    <div class="metric-label">Total Risks</div>
+                                    <div class="metric-value">${metrics.count}</div>
+                                </div>
+                            </div>
+                            
+                            ${type === 'businessunit' || type === 'bu' ? `
+                                <div class="mt-4 mb-4 text-center">
+                                    <button id="show-individual-risks" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded">
+                                        Show Individual Risks
+                                    </button>
+                                </div>
+                            ` : ''}
+                            
+                            <h3 class="font-medium mb-2">Risks (${entityRisks.length})</h3>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden">
+                                    <thead class="bg-gray-100 dark:bg-gray-700">
+                                        <tr>
+                                            <th class="px-4 py-2 text-left">ID</th>
+                                            <th class="px-4 py-2 text-left">Title</th>
+                                            <th class="px-4 py-2 text-left">Level</th>
+                                            <th class="px-4 py-2 text-left">Priority</th>
+                                            <th class="px-4 py-2 text-left">Velocity</th>
+                                            <th class="px-4 py-2 text-left">Magnitude</th>
+                                            <th class="px-4 py-2 text-left">Asset</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${entityRisks.map(risk => {
+                                            const timeData = risk.timeData?.[timeIndex] || { 
+                                                priority: 3, 
+                                                velocity: 2, 
+                                                magnitude: 3 
+                                            };
+                                            return `
+                                                <tr class="border-t border-gray-200 dark:border-gray-700">
+                                                    <td class="px-4 py-2">${risk.id || 'Unknown'}</td>
+                                                    <td class="px-4 py-2">${risk.title || 'Untitled'}</td>
+                                                    <td class="px-4 py-2">${risk.level || 'Unknown'}</td>
+                                                    <td class="px-4 py-2">
+                                                        <div class="flex items-center">
+                                                            <div class="w-3 h-3 rounded-full mr-2" style="background-color: ${getPriorityColor(timeData.priority)};"></div>
+                                                            P${Math.round(timeData.priority)}
+                                                        </div>
+                                                    </td>
+                                                    <td class="px-4 py-2">V${Math.round(timeData.velocity)}</td>
+                                                    <td class="px-4 py-2">${timeData.magnitude.toFixed(1)}</td>
+                                                    <td class="px-4 py-2">${risk.assetName || 'N/A'}</td>
+                                                </tr>
+                                            `;
+                                        }).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `}
+                    </div>
+                `;
+                
+                document.body.appendChild(popup);
+                
+                // Add event listener to the "Show Individual Risks" button
+                if (!hasNoRisks && (type === 'businessunit' || type === 'bu')) {
+                    const showRisksButton = popup.querySelector('#show-individual-risks');
+                    if (showRisksButton) {
+                        showRisksButton.addEventListener('click', () => {
+                            popup.remove();
+                            backdrop.remove();
+                            setOrgLevel(4); // Switch to individual risks view
+                        });
+                    }
+                }
+                
+                // Close popup when clicking the close button
+                const closeButton = popup.querySelector('.close-popup');
+                if (closeButton) {
+                    closeButton.addEventListener('click', () => {
+                        popup.remove();
+                        backdrop.remove();
+                    });
+                }
+                
+                // Close popup when clicking backdrop
+                backdrop.addEventListener('click', () => {
+                    popup.remove();
+                    backdrop.remove();
+                });
+                
+                // Close popup when pressing Escape key
+                document.addEventListener('keydown', function closeOnEscape(e) {
+                    if (e.key === 'Escape') {
+                        popup.remove();
+                        backdrop.remove();
+                        document.removeEventListener('keydown', closeOnEscape);
+                    }
+                });
+            } catch (error) {
+                debugLog(`Error showing entity details for ${entityType}: ${entityName}`, error);
+                // If we can't show the popup, at least log the error
+            }
+        }
+        
+        // Helper function to set org level with proper slider position
+        function setOrgLevel(level) {
+            try {
+                // Safety check
+                if (!orgSlider) return;
+                
+                // Set slider position
+                orgSlider.value = level;
+                
+                // Update the aquarium
+                updateAquarium();
+            } catch (error) {
+                debugLog(`Error setting org level to ${level}:`, error);
+            }
+        }
+
+        // Load data for a specific time index and update the visualization
+        async function loadDataForTimeIndex(timeIndex) 
+        {
+            try 
+            {
+                // Check if we already have data for this index
+                if (timeIndexedData[timeIndex]) 
+                {
+                    // Use existing data
+                    switchToTimeIndex(timeIndex);
+                    return true;
+                }
+                
+                // Try to load the Excel file
+                const workbook = await loadExcelFile(timeIndex);
+                if (workbook) 
+                {
+                    // Process the workbook and store the data
+                    const processedData = processExcelWorkbook(workbook);
+                    timeIndexedData[timeIndex] = processedData;
+                    
+                    // Switch to this data
+                    switchToTimeIndex(timeIndex);
+                    return true;
+                }
+                return false;
+            } 
+            catch (error) 
+            {
+                console.error(`Error loading data for time index ${timeIndex}:`, error);
+                const dataStatus = document.getElementById('data-status');
+                if (dataStatus) 
+                {
+                    dataStatus.textContent = `Error loading data: ${error.message}`;
+                }
+                showLoading(false);
+                return false;
+            }
+        } // eof loadDataForTimeIndex
+        
+        // Update aquarium based on selected time and organization level
+        function updateAquarium() 
+        {
+            try 
+            {
+                // Safety checks for required elements
+                if (!aquarium) 
+                {
+                    console.error("Aquarium element not found");
+                    return;
+                }
+                
+                // Clear existing risk bubbles
+                document.querySelectorAll('.risk-bubble').forEach(bubble => bubble.remove());
+                
+                const timeIndex = parseInt(timeSlider?.value || 4);
+                const orgLevel = parseInt(orgSlider?.value || 0);
+                
+                // Update labels
+                if (timeLabel) 
+                {
+                    switch(timeIndex) 
+                    {
+                        case 0: timeLabel.textContent = '4 weeks ago'; break;
+                        case 1: timeLabel.textContent = '3 weeks ago'; break;
+                        case 2: timeLabel.textContent = '2 weeks ago'; break;
+                        case 3: timeLabel.textContent = '1 week ago'; break;
+                        case 4: timeLabel.textContent = 'Current'; break;
+                        default: timeLabel.textContent = `Time ${timeIndex}`;
+                    }
+                }
+                
+                if (orgLevelIndicator) {
+                    switch(orgLevel) {
+                        case 0: 
+                            orgLevelIndicator.textContent = 'Organization';
+                            selectedDivision = null;
+                            selectedDepartment = null;
+                            selectedBU = null;
+                            break;
+                        case 1: 
+                            orgLevelIndicator.textContent = 'Divisions';
+                            selectedDepartment = null;
+                            selectedBU = null;
+                            break;
+                        case 2: 
+                            orgLevelIndicator.textContent = selectedDivision ? 
+                                `Departments in ${selectedDivision}` : 'All Departments';
+                            selectedBU = null;
+                            break;
+                        case 3: 
+                            orgLevelIndicator.textContent = selectedDepartment ? 
+                                `Business Units in ${selectedDepartment}` : 'All Business Units';
+                            break;
+                        case 4:
+                            if (selectedBU && selectedDepartment) {
+                                orgLevelIndicator.textContent = `Risks for ${selectedBU}`;
+                            } else if (selectedDepartment) {
+                                orgLevelIndicator.textContent = `Risks for ${selectedDepartment}`;
+                            } else if (selectedDivision) {
+                                orgLevelIndicator.textContent = `Risks for ${selectedDivision}`;
+                            } else {
+                                orgLevelIndicator.textContent = 'Individual Risks';
+                            }
+                            break;
+                        default:
+                            orgLevelIndicator.textContent = 'Risk View';
+                    }
+                }
+                
+                // Make sure we have data before continuing
+                if (!data || !data.risks || !data.orgStructure) 
+                {
+                    debugLog("No data available for visualization");
+                    return;
+                }
+                
+                // Debug info about what we're displaying
+                debugLog(`Updating aquarium: org level ${orgLevel}, time index ${timeIndex}`, {
+                    totalRisks: data.risks.length,
+                    totalDivisions: data.orgStructure.divisions?.length || 0,
+                    selectedDivision,
+                    selectedDepartment,
+                    selectedBU
+                });
+                
+                // Update safe zone visibility based on org level
+                // Show safe zone for BU and Risks views, hide for higher levels
+                if (safeZone) {
+                    safeZone.style.display = (orgLevel >= 3) ? 'block' : 'none';
+                }
+                
+                if (orgLevel === 0) {
+                    // Organization level - show a single bubble for the whole organization
+                    const orgMetrics = calculateAggregatedRiskMetrics('organization', data.orgStructure.organization, null, timeIndex);
+                    const orgBubble = createEntityBubble('organization', data.orgStructure.organization, null, null, orgMetrics, timeIndex);
+                    if (orgBubble) aquarium.appendChild(orgBubble);
+                } 
+                else if (orgLevel === 1) {
+                    // Division level - show one bubble per division
+                    debugLog(`Displaying ${data.orgStructure.divisions?.length || 0} divisions`);
+                    
+                    if (data.orgStructure.divisions && Array.isArray(data.orgStructure.divisions)) {
+                        data.orgStructure.divisions.forEach(division => {
+                            if (!division || !division.name) return;
+                            
+                            const divisionMetrics = calculateAggregatedRiskMetrics('division', division.name, null, timeIndex);
+                            const divisionBubble = createEntityBubble('division', division.name, null, null, divisionMetrics, timeIndex);
+                            if (divisionBubble) aquarium.appendChild(divisionBubble);
+                        });
+                    }
+                }
+                else if (orgLevel === 2) {
+                    // Department level
+                    let totalDeptDisplayed = 0;
+                    
+                    if (data.orgStructure.divisions && Array.isArray(data.orgStructure.divisions)) {
+                        data.orgStructure.divisions.forEach(division => {
+                            if (!division || !division.name) return;
+                            
+                            // If a division is selected, only show departments from that division
+                            if (selectedDivision && division.name !== selectedDivision) return;
+                            
+                            debugLog(`Processing departments for division ${division.name}`);
+                            debugLog(`Department count: ${division.departments?.length || 0}`);
+                            
+                            if (division.departments && Array.isArray(division.departments)) {
+                                division.departments.forEach(department => {
+                                    if (!department || !department.name) return;
+                                    
+                                    const departmentMetrics = calculateAggregatedRiskMetrics(
+                                        'department', 
+                                        department.name, 
+                                        division.name, 
+                                        timeIndex
+                                    );
+                                    const departmentBubble = createEntityBubble(
+                                        'department', 
+                                        department.name, 
+                                        division.name, 
+                                        null, 
+                                        departmentMetrics, 
+                                        timeIndex
+                                    );
+                                    if (departmentBubble) {
+                                        aquarium.appendChild(departmentBubble);
+                                        totalDeptDisplayed++;
+                                    }
+                                });
+                            }
+                        });
+                    }
+                    
+                    debugLog(`Total departments displayed: ${totalDeptDisplayed}`);
+                }
+                else if (orgLevel === 3) {
+                    // Business Unit level
+                    let totalBUsDisplayed = 0;
+                    
+                    if (data.orgStructure.divisions && Array.isArray(data.orgStructure.divisions)) {
+                        data.orgStructure.divisions.forEach(division => {
+                            if (!division || !division.name) return;
+                            
+                            // If a division is selected, only consider that division
+                            if (selectedDivision && division.name !== selectedDivision) return;
+                            
+                            if (division.departments && Array.isArray(division.departments)) {
+                                division.departments.forEach(department => {
+                                    if (!department || !department.name) return;
+                                    
+                                    // If a department is selected, only consider that department
+                                    if (selectedDepartment && department.name !== selectedDepartment) return;
+                                    
+                                    // Debug output for BUs
+                                    debugLog(`Processing BUs for ${department.name}`, department.businessUnits || []);
+                                    
+                                    if (department.businessUnits && Array.isArray(department.businessUnits)) {
+                                        department.businessUnits.forEach(bu => {
+                                            if (!bu) return;
+                                            
+                                            const buMetrics = calculateAggregatedRiskMetrics(
+                                                'businessUnit', 
+                                                bu, 
+                                                department.name, 
+                                                timeIndex
+                                            );
+                                            
+                                            const buBubble = createEntityBubble(
+                                                'businessUnit', 
+                                                bu, 
+                                                department.name, 
+                                                division.name, 
+                                                buMetrics, 
+                                                timeIndex
+                                            );
+                                            if (buBubble) {
+                                                aquarium.appendChild(buBubble);
+                                                totalBUsDisplayed++;
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                    }
+                    
+                    debugLog(`Total BUs displayed: ${totalBUsDisplayed}`);
+                }
+                else if (orgLevel === 4) {
+                    // Individual risks level - show filtered risks
+                    let risksToShow = [];
+                    
+                    if (selectedBU && selectedDepartment) {
+                        // If a specific BU is selected, show only risks for that BU
+                        // Use the same BU risk matching logic
+                        risksToShow = data.risks.filter(risk => 
+                            isBURisk(risk, selectedBU, selectedDepartment)
+                        );
+                    }
+                    else if (selectedDepartment && selectedDivision) {
+                        // If department is selected, show risks for that department and its BUs
+                        risksToShow = data.risks.filter(risk => {
+                            return (
+                                (risk.level === 'department' && 
+                                 risk.entity === selectedDepartment && 
+                                 risk.parentEntity === selectedDivision) ||
+                                ((risk.level === 'businessunit' || risk.level === 'bu') && 
+                                 risk.parentEntity === selectedDepartment && 
+                                 risk.grandparentEntity === selectedDivision) ||
+                                // Include BU-level risks with department in entity
+                                (risk.level === 'bu' && risk.entity === selectedDepartment)
+                            );
+                        });
+                    } else if (selectedDivision) {
+                        // If only division is selected, show risks for that division and its departments/BUs
+                        risksToShow = data.risks.filter(risk => {
+                            return (
+                                (risk.level === 'division' && risk.entity === selectedDivision) ||
+                                (risk.level === 'department' && risk.parentEntity === selectedDivision) ||
+                                ((risk.level === 'businessunit' || risk.level === 'bu') && 
+                                 risk.grandparentEntity === selectedDivision)
+                            );
+                        });
+                    } else {
+                        // Otherwise show all risks
+                        risksToShow = data.risks;
+                    }
+                    
+                    // Apply any active filters (preparation for future filtering feature)
+                    if (activeRiskFilters) {
+                        risksToShow = filterRisks(risksToShow, activeRiskFilters);
+                    }
+                    
+                    debugLog(`Displaying ${risksToShow.length} individual risks`);
+                    
+                    // Create and add risk bubbles
+                    risksToShow.forEach(risk => {
+                        const riskBubble = createRiskBubbleElement(risk, timeIndex);
+                        if (riskBubble) aquarium.appendChild(riskBubble);
+                    });
+                }
+            } catch (error) {
+                debugLog("Error updating aquarium:", error);
+                console.error("Error updating aquarium:", error);
+            }
+        }
+
+        // Initialize bubbles
+        createBubbles();
+        
+        // Load initial data and set up visualization
+        (async function initialize() 
+        {
+            try 
+            {
+                // Show loading state
+                showLoading(true);
+                const dataStatus = document.getElementById('data-status');
+                if (dataStatus) 
+                {
+                    dataStatus.textContent = 'Loading initial data...';
+                }
+                
+                // Try to load data for all time indices
+                const promises = [];
+                for (let i = 0; i <= 4; i++) 
+                {
+                    // Use a delay to avoid overwhelming the server with requests
+                    promises.push(new Promise(resolve => 
+                    {
+                        setTimeout(async () => 
+                        {
+                            try 
+                            {
+                                await loadDataForTimeIndex(i);
+                                resolve();
+                            } catch (error) 
+                            {
+                                console.error(`Failed to load data for time index ${i}:`, error);
+                                resolve(); // Resolve anyway to continue initialization
+                            }
+                        }, i * 500); // Stagger requests by 500ms
+                    }));
+                }
+                
+                // Wait for all data loading attempts to complete
+                await Promise.all(promises);
+                
+                // Start with the Current time
+                const initialTimeIndex = 4;
+                
+                // Switch to the current data
+                if (timeIndexedData[initialTimeIndex]) 
+                {
+                    switchToTimeIndex(initialTimeIndex);
+                    
+                    // Set up time slider to switch between data periods
+                    if (timeSlider) {
+                        timeSlider.addEventListener('change', function() {
+                            const timeIndex = parseInt(this.value);
+                            switchToTimeIndex(timeIndex);
+                            updateAquarium();
+                        });
+                    }
+                    
+                    // Set up org slider
+                    if (orgSlider) {
+                        orgSlider.addEventListener('input', updateAquarium);
+                    }
+                    
+                    // Initial update - start with Organization view
+                    setOrgLevel(0);
+                    
+                    if (dataStatus) {
+                        dataStatus.textContent = 'Data loaded successfully';
+                    }
+                } else {
+                    if (dataStatus) {
+                        dataStatus.textContent = 'Failed to load data automatically. Please try manual file upload below.';
+                    }
+                }
+                
+                // Hide loading state
+                showLoading(false);
+            } catch (error) 
+            {
+                console.error("Error during initialization:", error);
+                const dataStatus = document.getElementById('data-status');
+                if (dataStatus) 
+                {
+                    dataStatus.textContent = `Error initializing: ${error.message}. Please try manual file upload.`;
+                }
+                showLoading(false);
+            }
+        })();
+        
+        // Handle window resize
+        window.addEventListener('resize', () => 
+        {
+            try 
+            {
+                updateAquarium();
+                createBubbles();
+            } catch (error) {
+                console.error("Error handling window resize:", error);
+            }
+        });
+    </script>
+</body>
+</html>
