@@ -803,95 +803,68 @@
         function parseOrgStructure(sheet) 
         {
             const orgStructure = {};
-
-            // Iterate through rows to build hierarchy
-            sheet.forEach((row) => {
-                const id = String(row.ID).trim(); // Extract ID
-                const parentId = row.Parent_ID || null; // Extract Parent_ID (or null if not provided)
-
-                // Build hierarchy structure
-                if (!orgStructure[id]) 
-                {
-                    orgStructure[id] = { children: [] };
+            const HEADER_ROW = 1; // Skip Excel header
+            
+            XLSX.utils.sheet_to_json(sheet, { header: 1, range: HEADER_ROW }).forEach((row) => {
+                const id = row['Unit ID'].trim(); // Match your Excel column
+                const parentId = row['Parent Unit ID']?.trim(); // Match your Excel column
+                
+                if (!orgStructure[id]) {
+                orgStructure[id] = { 
+                    id,
+                    name: row['Unit Name'],
+                    children: [],
+                    parentId 
+                };
                 }
-
-                orgStructure[id] = { ...orgStructure[id], ...row };
-
-                if (parentId) 
-                {
-                    if (!orgStructure[parentId]) 
-                    {
-                        orgStructure[parentId] = { children: [] };
-                    }
-                    orgStructure[parentId].children.push(orgStructure[id]);
+            });
+            
+            // Build hierarchy
+            Object.values(orgStructure).forEach(unit => {
+                if (unit.parentId && orgStructure[unit.parentId]) {
+                orgStructure[unit.parentId].children.push(unit);
                 }
             });
 
+            console.log('Org Structure:', Object.values(orgStructure));
+            
             return orgStructure;
         } // end of parseOrgStructure
 
         function parseRisks(sheet, orgStructure) 
         {
-            const REQUIRED_COLS = ['Risk ID', 'Org Unit ID', 'Priority'];
-            const headers = Object.keys(sheet[0]);
-            
-            REQUIRED_COLS.forEach(col => {
-                if (!headers.includes(col)) {
-                throw new Error(`Missing required column: ${col}`);
-                }
-            });
-            
             const risks = [];
+            const HEADER_ROW = 1; // Skip Excel header row
+            
+            // Use explicit column names from your Excel
+            const COLUMN_MAP = {
+                riskId: 'Risk ID',
+                orgUnit: 'Division', // Match your Excel header
+                department: 'Department',
+                businessUnit: 'Business Unit'
+            };
 
-            sheet.forEach((row) => 
-            {
-                try 
-                {
-                    // Extract orgUnitId and normalize it
-                    const orgUnitId = row["__EMPTY_3"] ? String(row["__EMPTY_3"]).trim() : null;
-                    console.info("Risks: extracted orgUnitId:", orgUnitId);
+            XLSX.utils.sheet_to_json(sheet, { header: 1, range: HEADER_ROW }).forEach((row) => {
+                try {
+                const orgUnitId = row[COLUMN_MAP.orgUnit]?.trim();
+                
+                if (!orgUnitId || !orgStructure[orgUnitId]) {
+                    console.warn(`Orphaned risk ${row[COLUMN_MAP.riskId]} in unit ${orgUnitId}`);
+                    return;
+                }
 
-                    // Check if orgUnitId is valid and matches orgStructure
-                    if (!orgUnitId) 
-                    {
-                        console.warn("Risks: missing orgUnitId in row:", row);
-                        return; // Skip this row
-                    }
-
-                    const orgUnit = orgStructure[orgUnitId];
-                    if (!orgUnit) 
-                    {
-                        console.warn(`Risks: no matching orgUnit found for orgUnitId: ${orgUnitId}`);
-                        return; // Skip this row
-                    }
-
-                    // console.info("Matching orgUnit in orgStructure:", orgUnit);
-
-                    // Build the risk object
-                    const risk = 
-                    {
-                        id: row["Table 1"],
-                        title: row["__EMPTY"],
-                        description: row["__EMPTY_1"],
-                        type: row["__EMPTY_2"],
-                        orgUnit: orgUnit,
-                        category: row["__EMPTY_4"],
-                        owner: row["__EMPTY_5"],
-                        level: row["__EMPTY_6"],
-                        priority: row["__EMPTY_7"],
-                        velocity: row["__EMPTY_8"],
-                        magnitude: row["__EMPTY_9"],
-                        assetId: row["__EMPTY_10"],
-                        mitigationPlan: row["__EMPTY_11"]
-                    };
-
-                    risks.push(risk);
-                } 
-                catch (error) 
-                {
-                    console.error("Risks: error parsing row:", row, error);
+                risks.push({
+                    id: row[COLUMN_MAP.riskId],
+                    title: row['Title'],
+                    orgUnit: orgStructure[orgUnitId],
+                    priority: row['Priority']
+                });
+                } catch (error) {
+                console.error('Risk parse error:', error);
                 }
             });
+            
+            console.log('Parsed Risks:', risks);
 
             return risks;
         } // end of parseRisks
