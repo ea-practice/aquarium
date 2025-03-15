@@ -805,17 +805,19 @@
             const orgStructure = {};
             const HEADER_ROW = 1; // Skip Excel header
             
-            XLSX.utils.sheet_to_json(sheet, { header: 1, range: HEADER_ROW }).forEach((row) => {
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, range: 1 });
++           rows.forEach((row) => 
+            {
                 const id = row['Unit ID'].trim(); // Match your Excel column
                 const parentId = row['Parent Unit ID']?.trim(); // Match your Excel column
                 
                 if (!orgStructure[id]) {
-                orgStructure[id] = { 
-                    id,
-                    name: row['Unit Name'],
-                    children: [],
-                    parentId 
-                };
+                    orgStructure[id] = { 
+                        id,
+                        name: row['Unit Name'],
+                        children: [],
+                        parentId 
+                    };
                 }
             });
             
@@ -844,27 +846,33 @@
                 businessUnit: 'Business Unit'
             };
 
-            XLSX.utils.sheet_to_json(sheet, { header: 1, range: HEADER_ROW }).forEach((row) => {
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, range: 1 });
++           rows.forEach((row) => 
+            {
                 try {
-                const orgUnitId = row[COLUMN_MAP.orgUnit]?.trim();
-                
-                if (!orgUnitId || !orgStructure[orgUnitId]) {
-                    console.warn(`Orphaned risk ${row[COLUMN_MAP.riskId]} in unit ${orgUnitId}`);
-                    return;
-                }
+                    const orgUnitId = row[COLUMN_MAP.orgUnit]?.trim();
+                    
+                    if (!orgUnitId || !orgStructure[orgUnitId]) {
+                        console.warn(`Orphaned risk ${row[COLUMN_MAP.riskId]} in unit ${orgUnitId}`);
+                        return;
+                    }
 
-                risks.push({
-                    id: row[COLUMN_MAP.riskId],
-                    title: row['Title'],
-                    orgUnit: orgStructure[orgUnitId],
-                    priority: row['Priority']
-                });
+                    risks.push({
+                        id: row[COLUMN_MAP.riskId],
+                        title: row['Title'],
+                        orgUnit: orgStructure[orgUnitId],
+                        priority: row['Priority']
+                    });
                 } catch (error) {
-                console.error('Risk parse error:', error);
+                    console.error('Risk parse error:', error);
                 }
             });
             
             console.log('Parsed Risks:', risks);
+            console.log('Parsed risks raw data:', rows);
++           console.log('Mapped orgUnitId example:', rows[0]?.[COLUMN_MAP.orgUnit]);
++           console.log('OrgStructure reference check:', 
++                orgStructure[rows[0]?.[COLUMN_MAP.orgUnit]]);
 
             return risks;
         } // end of parseRisks
