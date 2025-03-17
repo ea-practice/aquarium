@@ -614,17 +614,26 @@
         let activeRiskFilters = null; // Will be populated when filtering is added
 
         // Debug logging - keep intact for upcoming filtering feature
-        function debugLog(message, data = null) {
-            if (!CONFIG.DEBUG) return;
+        function debugLog(message, data = null) 
+        {
+            if (!CONFIG.DEBUG) 
+            {
+                return;
+            } else
+            {
+               console.log(`[DEBUG] ${message}`, data || ''); 
+            }
             
-            try {
+            try 
+            {
                 const debugOverlay = document.getElementById('debug-overlay');
                 if (!debugOverlay) return; // Safety check
                 
                 const timestamp = new Date().toLocaleTimeString();
                 let logMessage = `<div class="mb-1"><span class="opacity-50">${timestamp}</span> ${message}</div>`;
                 
-                if (data) {
+                if (data) 
+                {
                     try {
                         // For objects, stringify them
                         if (typeof data === 'object') {
@@ -772,22 +781,19 @@
             {
                 'Risks': 
                 {
-                    minRows: 1,
-                    requiredColumns: ['Risk ID', 'Title', 'Parent_ID', 'Priority'],
+                    requiredColumns: ['Risk ID', 'Title', 'Org Unit ID', 'Priority'], // Changed Parent_ID → Org Unit ID
                     foreignKeys: {
-                        'Parent_ID': { sheet: 'Org Structure', column: 'ID' }
+                        'Org Unit ID': { sheet: 'Org Structure', column: 'ID' } // Link risks to org units
                     }
                 },
                 'Org Structure': 
                 {
-                    minRows: 1,
-                    requiredColumns: ['ID', 'Name', 'Parent_ID'],
+                    requiredColumns: ['ID', 'Name', 'Parent_ID'], // Parent_ID stays here
                     hierarchical: true
                 },
                 'Assets': 
                 {
-                    minRows: 1,
-                    requiredColumns: ['Asset ID', 'Name', 'Value']
+                    requiredColumns: ['Asset ID', 'Asset name', 'Asset value'] // Keep as-is
                 }
             }
         }; // eof WORKBOOK_REQUIREMENTS
@@ -800,6 +806,8 @@
                 errors: [],
                 warnings: []
             };
+
+            debugLog('[VALIDATION] Workbook sheets:', workbook.SheetNames);
 
             // Sheet existence checks
             const sheetNames = workbook.SheetNames;
@@ -820,8 +828,10 @@
             });
 
             // Per-sheet validation
-            WORKBOOK_REQUIREMENTS.requiredSheets.forEach(sheetName => {
+            WORKBOOK_REQUIREMENTS.requiredSheets.forEach(sheetName => 
+            {
                 const sheet = workbook.Sheets[sheetName];
+                debugLog(`[VALIDATION] Processing sheet ${sheetName}:`, sheet ? 'exists' : 'MISSING');
                 if (!sheet) return;
 
                 const spec = WORKBOOK_REQUIREMENTS.sheetSpecs[sheetName];
@@ -837,7 +847,8 @@
                 });
 
                 // Data presence
-                if (data.length < spec.minRows + 1) {
+                if (data.length < spec.minRows + 1) 
+                {
                     validationResult.errors.push(
                         `Sheet "${sheetName}" requires at least ${spec.minRows} data rows (found ${data.length - 1})`
                     );
@@ -845,7 +856,8 @@
                 }
 
                 // Foreign key validation
-                if (spec.foreignKeys) {
+                if (spec.foreignKeys) 
+                {
                     Object.entries(spec.foreignKeys).forEach(([col, { sheet: refSheet, column: refCol }]) => {
                         const refData = workbook.Sheets[refSheet] ? 
                             XLSX.utils.sheet_to_json(workbook.Sheets[refSheet]) : [];
@@ -864,6 +876,7 @@
                 }
             });
 
+            debugLog("Validation Result:", validationResult);
             return validationResult;
         } // eof validateWorkbook
 
@@ -935,7 +948,7 @@
             const orgStructure = {};
             const COLUMN_MAP = {
                 id: 'ID',
-                parentId: 'Parent_ID', // Matches your Excel
+                parentId: 'Org Unit ID', // Matches your Excel
                 name: 'Name',
                 level: 'Level'
             };
@@ -972,7 +985,7 @@
             const risks = [];
             const COLUMN_MAP = {
                 riskId: 'Risk ID',
-                orgUnit: 'Parent_ID' // Match risk's organizational reference
+                orgUnit: 'Org Unit ID' // Key change here
             };
 
             XLSX.utils.sheet_to_json(sheet, { header: 1, range: 1 }).forEach(row => 
@@ -983,7 +996,7 @@
                     
                     if (!orgStructure[orgUnitId]) 
                     {
-                        console.warn(`Orphaned risk ${row[COLUMN_MAP.riskId]} in unit ${orgUnitId}`);
+                        console.warn(`Risk ${row['Risk ID']} references invalid Org Unit: ${orgUnitId}`);
                         return;
                     }
 
@@ -2353,25 +2366,33 @@
             try 
             {
                 const filename = `data/week_0${4 - timeIndex}.xlsx`;
+                debugLog(`[LOADER] Fetching ${filename}`);
                 const response = await fetch(filename);
                 
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                if (!response.ok) 
+                {
+                    debugLog(`[LOADER] HTTP error ${response.status} for ${filename}`);
+                    throw new Error(`HTTP ${response.status}`);
+                }
                 
                 const buffer = await response.arrayBuffer();
+                debugLog(`[LOADER] Loaded ${filename} (${buffer.byteLength} bytes)`);
                 const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
                 
                 // Validate before parsing
                 const validation = validateWorkbook(workbook);
                 if (!validation.isValid) 
                 {
-                  showValidationError(timeIndex, validation.errors);
-                  return false;
+                    debugLog(`[VALIDATION] Errors in ${filename}:`, validation.errors);
+                    showValidationError(timeIndex, validation.errors);
+                    return false;
                 }
 
                 timeIndexedData[timeIndex] = processExcelWorkbook(workbook);
                 return true;
-            } catch (error) {
-                console.error(`Failed to load ${filename}:`, error);
+            } catch (error) 
+            {
+                debugLog(`[LOADER] Critical error loading ${filename}:`, error);
                 return false;
             }
         } // eof loadDataForTimeIndex
