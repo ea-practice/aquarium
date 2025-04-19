@@ -1,0 +1,26 @@
+Table 1
+Field,Description,Data Type,Required,Min Value,Max Value,Notes
+Risk_ID,Unique identifier for risk,String,Yes,,,Must be unique
+Title,Title of the risk,String,Yes,,100,Max Length: 100
+Description,Risk’s description,String,No,,500,Max Length: 500
+Type,Risk or Issue,String,Yes,,,“Risk” or “Issue”
+Org_Unit_ID,Unit ID,Number,Yes,,9999,Must match ID in Org Structure 
+Category,Risk’s category,String,Yes,,,
+Owner,Risk owner,String,Yes,,50,Max Length: 50
+Level,Org level this risk belongs to,,,,,
+Priority,Risk priority,Number,Yes,1,5,"1 = low, 5 = high"
+Velocity,Risk velocity,Number,Yes,1,3,"1 = low, 3 = high"
+Magnitude,Risk magnitude,Number,Yes,1,5,"1 = low, 5 = high"
+Asset_ID,Affected asset ID,String,Yes,,,Must be unique
+Mitigation_plan,Mitigation Plan,String,No,,500,Max Length: 500
+,,,,,,
+ID,Org ID,Number,Yes,,,Org Unit ID
+Level,Organizational level,Number,Yes,,4,"Values: 1 - organization, 2 - division, 3 - department, 4 - BU"
+Name,Org Unit name,String,Yes,,100,Max Length: 100
+Parent_ID,Parent ID,String,Yes,,9999,
+Abbreviation,Abbreviation,String,No,,20,Max Length: 20
+,,,,,,
+Asset_ID,Affected asset ID,String,Yes,,,Must be unique
+Asset_name,Affected asset name,String,Yes,,50,Max Length: 50
+Org_Unit_ID,Affected asset owner,String,Yes,,50,Max Length: 50
+Asset_value,Affected asset value,Number,Yes,0,"100,000,000.00",
