@@ -1,0 +1,246 @@
+Table 1
+ID,Level,Name,Parent_ID,Abbreviations
+1,1,Enterprise Operations,,
+100,2,Technology Implementation Svcs,1,TIS
+101,3,Aged Infrastructure Init Support Office,100,Aged
+102,4,Inf Lifecycle Planning,101,ILP
+103,4,Inf Asset Mgmt,101,IAF
+104,3,Erecords Tech Supp Office,100,ERec
+105,3,IT E-Discovery Office,100,EDis
+106,3,Tech Deployment Svcs Office,100,TDSO
+107,4,Tech Prog Mgmt Serv Section,106,TPgMS
+108,4,Infrastructure Upgrade Svcs Section,106,Upgrade
+109,3,TIS Div Mgmt Office,100,TDMO
+,,,,
+200,2,Demand Mgmt & Proj Gov Division,1,DMPG
+201,3,Audit Program Office,200,Audit
+202,3,Contract & Acquisition Mgmt Branch,200,C&A Br
+203,4,Contract & Acq Srvs Supp Section,202,C&A Svs Sec
+204,4,Contract & Acq Infras Supp Section,202,C&A Infra Sec
+205,4,Contract & Acq Analytics Intake,202,C&A Intake
+206,3,Governance & Resource Mgmt Branch,200,G&R Br
+207,4,Governance & Risk Mgmt Section,206,G&R Sec
+208,4,Chg & Config Mgmt Section,206,Ch&Conf
+209,4,Filing Season Readiness Section,206,FS Sec
+210,3,Large Program Sup Office 1,200,LPgM 1
+211,4,Lp1 Support Section 1-A,210,LPgM 1A
+212,4,Lp1 Support Section 1-B,210,LPgM 1B
+213,3,Large Program Sup Office 2,200,LPgM 2
+214,4,Lp2 Support Section 2-A,213,LPgM 2A
+215,4,Devops Practice,213,DevOps
+216,3,Large Program Support Office 3,200,LPgM 3
+217,4,Lp3 Support Section 3-A,216,LPgM 3A
+218,4,Lp3 Support Section 3-B,216,LPgM 3B
+219,3,Portfolio Mgmt Program Office,200,PfM PMO
+220,3,Ops Transformation Program Office,200,OTPO
+221,3,Infrastructure Eng Prog Office,200,IEPO
+222,3,Project Management Branch,200,PM Br
+223,4,Demand Management Section,222,DM Sec
+224,4,Project Planning & Org Readiness Section,222,PP&OR Sec
+225,4,Customer & Tech Support Section,222,C&T Sec
+226,3,Workforce Program Office,200,WF PMO
+227,3,DMPG Program Office,200,DMPG PMO
+228,3,Demand Mgmt & Proj Gov Division Mgmt Office,200,DMPG DMO
+,,,,
+300,2,Infrastructure Services Division,1,ISD
+301,3,Automation Support Branch,300,AS Br
+302,4,Infrastructure Support Section,301,IS Sec
+303,4,Tier 3 Automation Section,301,T3 Sec
+304,4,Software Distribution Section,301,SWD Sec
+305,3,Directory Services Branch,300,Dir Br
+306,4,Directory Management 1 Section,305,Dir 1 Sec
+307,4,Directory Management 2 Section,305,Dir 2 Sec
+308,4,Directory Management 3 Section,305,Dir 3 Sec
+309,4,PKI PMO,305,PKI
+310,3,Enterprise Messaging & Virtualization Branch,300,E-Msg&V
+311,4,Enterprise Messaging Infrastructure Services,310,E-Msg&Infra
+312,4,Enterprise Messaging Compliance Services,310,E-Msg&Comp
+313,4,Virtual Tech Integ Sect,310,VTI Sec
+314,4,Virtualization Support Section,310,VS Sec
+315,4,Automation & Infras Support,310,Auto&Infra
+316,3,Middleware Services Branch,300,MW Br
+317,4,Middleware Appl Svcs,316,MW App
+318,4,File & Msg Trans Svcs,316,File&Msg Trans
+319,4,Middleware Trans Svcs,316,MW Trans
+320,3,Infrastructure Serv Division Mgmt Office,300,Infra MO
+,,,,
+400,2,Enterprise Computing Center,1,ECC
+401,3,Ecc Div Mgmt Office,400,
+402,3,Ecc Proj Resp Incident & Mgmt Branch,400,
+403,4,Project Mgmt Support Section,402,
+404,4,Data Center Support Section,402,
+405,3,Ent Automated Deployment,400,
+406,4,Sys Con & Val Section,405,
+407,4,Deployment & Release Mgmt Section,405,
+408,4,Mainframe Config Mgmt Section,405,
+409,4,Technical Release Impl (TRIS) Section,405,
+410,4,Automation Deployment Section,405,
+411,4,Server Configuration Mgmt Section,405,
+412,3,Mainframe Operations Branch,400,
+413,4,Service Center Support Section,412,
+414,5,Service Center Support Unit A-1(Day),413,
+415,5,Service Center Support Unit A-2(Day),413,
+416,5,Service Center Support Unit B(Swing),413,
+417,5,Service Center Support Unit C(Midnight),413,
+418,4,Master File Support Section,412,
+419,5,Master File Support Unit A (Day),418,
+420,5,Master File Support Unit B (Swing),418,
+421,5,Master File Support Unit C (Midnight),418,
+422,4,Idse Section,412,
+423,5,Northeast Print Unit,422,
+424,5,South Central Print Unit,422,
+425,5,Western Print Unit,422,
+426,4,Quality Support Center,412,
+427,3,Operations Scheduling Branch,400,
+428,4,Server Scheduling Section,427,
+429,4,Mainframe Scheduling Section,427,
+430,5,Mainframe Scheduling Unit 1,429,
+431,5,Mainframe Scheduling Unit 2,429,
+432,5,Mainframe Scheduling Unit 3,429,
+433,5,Mainframe Scheduling Unit 4,429,
+434,5,Mainframe Scheduling Unit 5,429,
+435,4,File Transfer Section,427,
+436,3,Server Inf Support Branch,400,
+437,4,Wintel Svr O&M Section,436,
+438,4,Mgmt Support Services Sec,436,
+439,4,Unix/Linux Svr O&M Section,436,
+440,4,Server Patch & Tools Section,436,
+441,3,Server Prod & App Sup Branch 1,400,
+442,4,Unix/Linux P&A Spt Section 1a,441,
+443,4,Wintel P&A Spt Section 1b,441,
+444,4,Wintel P&A Spt Section 1c,441,
+445,3,Server Prod & App Spt Branch 2,400,
+446,4,Unix/Linux P&A Spt Section 2a,445,
+447,4,Unix/Linux P&A Spt Section 2b,445,
+448,4,Wintel P&A Spt Section 2c,445,
+449,3,Server Prod & App Spt Branch 3,400,
+450,4,Unix/Linux P&A Spt Section 3a,449,
+451,4,Unix/Linux P&A Spt Section 3b,449,
+452,4,Wintel P&A Spt Section 3c,449,
+453,3,Server Prod & App Spt Branch 4,400,
+454,4,Unix/Linux P&A Spt Section 4b,453,
+455,4,Wintel P&A Spt Section 4a,453,
+456,4,Wintel P&A Spt Section 4c,453,
+457,4,Wintel P&A Spt Section 4d,453,
+,,,,
+500,2,Enterprise Server Division,1,ESD
+501,3,Enterprise Server Div Mgmt Office,500,
+502,3,IBM Z/Vm & Tpf Svcs Branch,500,
+503,4,IBM Z/Tpf Support Section,502,
+504,4,IBM Z/Vm Support Section,502,
+505,3,IBM/Os Support Branch,500,
+506,4,IBM Z/Os Support Section,505,
+507,4,IBM Automation Section,505,
+508,4,IBM Z/Os Cots Section,505,
+509,4,IBM Z/Os Trans Proc Section,505,
+510,3,Unisys Support Branch,500,
+511,4,Unisys Operating Sys Supp Section,510,
+512,4,Unisys Comms Supp Sec,510,
+513,3,Modernization Program Office,500,
+,,,,
+600,2,Data Mgmt Services & Support Division,1,DMSS
+601,3,Data Mgmt Services & Support Division Mgmt Office,600,
+602,3,Data Storage & Protection Branch,600,
+603,4,Data Protection Section 1,602,
+604,4,Data Protection Section 2,602,
+605,4,Tier 1 Storage Section,602,
+606,4,Tier 2 Storage & San Section,602,
+607,3,Distributed Db Services Br 1,600,
+608,4,Oracle Db Support Section 1,607,
+609,4,Oracle Db Support Section 2,607,
+610,4,Oracle Db Support Section 3,607,
+611,4,Database Infras Support,607,
+612,3,Distributed Db Services Br 2,600,
+613,4,Analytics Db Support Section,612,
+614,4,Sql Db Support Section 1,612,
+615,4,Sql Db Support Section 2,612,
+616,3,Enterprise Database Svc Branch,600,
+617,4,Db2 Database Support Section,616,
+618,4,Db2 Evening Support Section,616,
+619,4,Unisys Database Support Section,616,
+620,4,Unisys Database Admin Section,616,
+621,4,Db2 Systems Support Section,616,
+622,3,Mids Strategic Mgmt Ofc,600,
+,,,,
+700,2,IT Operations Command Center Division,1,ITOCC
+701,3,IT Operations Command Center (Itocc) Div Mgmt Off,700,
+702,3,Incident & Problem Mgmt Branch,700,
+703,4,Event Management Section,702,
+704,4,Incident Management Section,702,
+705,4,Problem Management Section,702,
+706,3,IT Service Management Branch,700,
+707,4,Itsm Tools Administration,706,
+708,4,Automation Reporting & Metrics,706,
+709,4,Continual Service & Innovation,706,
+710,3,Mainframe Monitor/Triage Branch,700,
+711,4,Mainframe Day Monitoring/Triage Section,710,
+712,4,Mainframe Mids Monitoring/Triage Section,710,
+713,4,Mainframe Swing Monitoring/Triage Section,710,
+714,3,Monitoring Solutions Branch,700,
+715,4,Monitoring Build Section,714,
+716,4,Monitoring Management,714,
+717,4,Monitoring Implementation,714,
+718,3,Server & Network Monitoring/Triage Branch,700,
+719,4,Server Day Monitor/Triage Sec,718,
+720,4,Server Mids Monitor/Triage Sec,718,
+721,4,Server Swing Monit/Triage Sec,718,
+722,4,Network Monitor/Triage Section,718,
+723,3,Irworks Proj Deployment,700,
+724,3,Svc Management Prog Ofc,700,
+,,,,
+800,2,Web Infrastructure Services,1,WIS
+801,3,WIS Division Mgmt Office,800,
+802,3,Internet Services Branch,800,
+803,4,Internet Srvc Delivery,802,
+804,4,Internet Srvc Integration,802,
+805,3,Cloud Integration Ofc,800,
+806,4,Cloud Operations Section,805,
+807,4,Cloud Delivery Section,805,
+808,3,M365 Prgm Mgmt Branch,800,
+809,4,Sharepoint Prgm Mgmt Svcs,808,
+810,4,M365 Prgm Mgmt Svcs,808,
+811,3,Svcs Acq Strategy Ofc,800,
+,,,,
+900,2,Network Engineering,1,NE
+901,3,Engineering,900,
+902,4,F5 Support Team,901,
+903,4,Ccg & Firewall Support,901,
+904,4,L4 Engineering,901,
+905,4,Ecc-Mtb Network Support,901,
+906,4,Ecc Mem Network Support,901,
+907,4,L4 Engineering Cloud,901,
+908,3,Network Management Center,900,
+909,4,Ip & Remote Mgmt,908,
+910,4,Network Mgmt Control Center,908,
+911,4,PMO & Network Admin,908,
+912,4,Contract Support,908,
+913,4,Network Security & Policy,908,
+914,4,Network Infrastructure Mgmt,908,
+915,4,Nmcc Extended Support,908,
+916,4,Nmcc Cloud Monitoring,908,
+917,3,Infrastructure Services,900,
+918,4,Analysis & Planning,917,
+,,,,
+1000,2,Server Support & Services Division,1,SSSD
+1001,3,Server Supt & Services Division Mgmt Office,1000,
+1002,3,Server Build Branch,1000,
+1003,4,Linux Server Build Section,1002,
+1004,4,Server Automation Section,1002,
+1005,4,Windows Server Build,1002,
+1006,3,Software Support Branch,1000,
+1007,4,Rational Support Svcs Sect,1006,
+1008,4,Unix/Linux Cots Support Section,1006,
+1009,4,Wintel Cots Support Section,1006,
+1010,4,Rational Infrastructure Section,1006,
+1011,3,Program and Project Management Office,1000,
+1012,3,Standards Management Office,1000,
+,,,,
+1100,2,Division 3805,1,
+1101,3,Branch 02,1100,
+1102,4,Section 03,1101,
+1103,3,Branch 03,1100,
+,,,,
+1200,2,Division 3808,1,
+1201,3,Branch 05,1200,
+1202,4,Section 02,1201,
+1203,3,Branch 07,1200,
