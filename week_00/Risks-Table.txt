@@ -1,0 +1,13 @@
+Table 1
+Risk_ID,Title,Description,Type,Org_Unit_ID,Category,Owner,Level,Priority,Velocity,Magnitude,Asset_ID,Mitigation_Plan
+R01,Investment Risk 01,Description Risk 01,Risk,217,Investment,Owner 217,4,3,1,4,Asset 27,"Monitoring, reduce impact"
+R02,Investment Risk 02,Description Risk 02,Risk,102,Investment,Owner 02,4,1,1,4,Asset 02,"Monitoring, reduce impact"
+R03,Financial Risk 03,Description Risk 03,Risk,103,Financial,Owner 03,4,1,3,3,Asset 03,"Monitoring, reduce impact"
+R04,Compliance Risk 04,Description Risk 04,Risk,107,Compliance,Owner 04,4,2,3,1,Asset 07,"Monitoring, reduce impact"
+R05,Financial Risk 05,Description Risk 05,Risk,108,Financial,Owner 05,4,2,2,3,Asset 08,"Monitoring, reduce impact"
+R06,Financial Risk 06,Description Risk 06,Risk,106,Financial,Owner 05,3,1,2,4,Asset 06,"Monitoring, reduce impact"
+R07,Operational Risk 07,Description Risk 07,Risk,203,Operational,Owner 07,4,1,2,3,Asset 23,"Monitoring, reduce impact"
+R08,Operational Risk 08,Description Risk 08,Risk,202,Operational,Owner 08,3,2,2,2,Asset 22,"Monitoring, reduce impact"
+R09,Compliance Risk 09,Description Risk 09,Risk,214,Compliance,Owner 09,4,3,1,4,Asset 08,"Monitoring, reduce impact"
+R10,Financial Risk 10,Description Risk 10,Risk,219,Financial,Owner 10,3,5,2,3,Asset 02,"Monitoring, reduce impact"
+R11,Compliance Risk 11,Description Risk 11,Risk,227,Compliance,Owner 11,3,3,3,2,Asset 01,"Monitoring, reduce impact"
