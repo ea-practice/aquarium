@@ -885,8 +885,9 @@
         );
       } // eof addFloatingAnimation
 
-      // Utility Functions (Lines 600–650)
-      function parseSheet(sheet) {
+      /* Utility Functions (Lines 600–650)
+      function parseSheet(sheet) 
+      {
         const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }); // Get rows as a 2D array
         const headers = rows[0].map((header) => header.trim()); // Normalize headers
         const data = rows.slice(1).map((row) =>
@@ -899,33 +900,33 @@
       } // eof parseSheet
 
       // Parsing functionality
-      /*
-        function parseFile(workbook) 
-        {
-            const sheets = workbook.Sheets;
 
-            // Determine file format based on the presence of specific fields
-            // const isNewFormat = sheets["Org Structure"] && sheets["Org Structure"][0].ID;
-            // console.info(`Read sheet Org Structure :`);
+      function parseFile(workbook) 
+      {
+        const sheets = workbook.Sheets;
 
-            var orgSheet = sheets["Org Structure"]; // raw orgSheet object
-            const orgStructure = parseOrgStructure(parseSheet(orgSheet));
-            console.info(`Org Structure :`, orgStructure);
+        // Determine file format based on the presence of specific fields
+        // const isNewFormat = sheets["Org Structure"] && sheets["Org Structure"][0].ID;
+        // console.info(`Read sheet Org Structure :`);
 
-            // rawSheet = sheets["Risks"]; // raw riskSheet object
-            // console.info("Risks sheet", rawSheet);
-            const risks = parseRisks(parseSheet(sheets["Risks"]), orgStructure);
+        var orgSheet = sheets["Org Structure"]; // raw orgSheet object
+        const orgStructure = parseOrgStructure(parseSheet(orgSheet));
+        console.info(`Org Structure :`, orgStructure);
 
-            // rawSheet = sheets["Assets"]; // raw riskSheet object
-            // console.info("Assets sheet", rawSheet);
-            const assets = parseAssets(parseSheet(sheets["Assets"]), orgStructure);
+        // rawSheet = sheets["Risks"]; // raw riskSheet object
+        // console.info("Risks sheet", rawSheet);
+        const risks = parseRisks(parseSheet(sheets["Risks"]), orgStructure);
 
-            console.info("Parsed risks:", risks);
-            console.info("Parsed assets:", assets);
+        // rawSheet = sheets["Assets"]; // raw riskSheet object
+        // console.info("Assets sheet", rawSheet);
+        const assets = parseAssets(parseSheet(sheets["Assets"]), orgStructure);
 
-            return { orgStructure, risks, assets };
-        } // end of parseFile
-        */
+        console.info("Parsed risks:", risks);
+        console.info("Parsed assets:", assets);
+
+        return { orgStructure, risks, assets };
+      } // end of parseFile
+      */
 
       // build Org Structure
       function buildHierarchy(orgStructure) {
