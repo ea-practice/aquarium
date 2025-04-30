@@ -21,6 +21,8 @@
     <!-- Load the explicit UMD build with version pinning -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+    <!-- Add SheetJS library for Excel parsing -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <style>
       :root {
         --priority-1-color: #3b82f6; /* Blue */
@@ -635,6 +637,9 @@
         "week_00.xlsx",
       ];
 
+      /* Add file upload handler for manual loading
+      const fileInput = document.getElementById("file-input");
+      const fileList = document.getElementById("file-list");
       const uploadedFiles = {};
 
       fileInput.addEventListener("change", function (e) {
@@ -674,6 +679,7 @@
           reader.readAsArrayBuffer(file);
         });
       });
+      */
 
       // Theme detection and toggle
       const prefersDarkScheme = window.matchMedia(
@@ -683,6 +689,48 @@
       const themeToggle = document.querySelector(".theme-toggle");
       const darkIcon = document.querySelector(".theme-icon-dark");
       const lightIcon = document.querySelector(".theme-icon-light");
+
+      // Debug logging - keep intact for upcoming filtering feature
+      function debugLog(message, data = null) {
+        if (!CONFIG.DEBUG) return;
+
+        try {
+          const debugOverlay = document.getElementById("debug-overlay");
+          if (!debugOverlay) return; // Safety check
+
+          const timestamp = new Date().toLocaleTimeString();
+          let logMessage = `<div class="mb-1"><span class="opacity-50">${timestamp}</span> ${message}</div>`;
+
+          if (data) {
+            try {
+              // For objects, stringify them
+              if (typeof data === "object") {
+                const stringified = JSON.stringify(data, null, 2)
+                  .replace(/</g, "&lt;")
+                  .replace(/>/g, "&gt;");
+                logMessage += `<pre class="text-xs bg-black bg-opacity-50 p-1 my-1 rounded overflow-auto max-h-20">${stringified}</pre>`;
+              } else {
+                logMessage += `<pre class="text-xs bg-black bg-opacity-50 p-1 my-1 rounded">${data}</pre>`;
+              }
+            } catch (e) {
+              logMessage += `<div class="text-red-300">[Error displaying data: ${e.message}]</div>`;
+            }
+          }
+
+          debugOverlay.innerHTML = logMessage + debugOverlay.innerHTML;
+
+          // Limit the amount of debug messages to prevent browser slowdown
+          if (debugOverlay.children.length > 20) {
+            debugOverlay.lastChild.remove();
+          }
+
+          // Also log to console
+          console.log(message, data);
+        } catch (error) {
+          // Fail silently - debug logging should never break the application
+          console.log("Debug log error:", error);
+        }
+      }
 
       function setTheme(isDark) {
         if (isDark) {
@@ -1134,11 +1182,16 @@
       }
 
       async function loadExcelFile(timeIndex) {
+        console.log(
+          "DEBUG - Global uploadedFiles exists?",
+          typeof uploadedFiles !== "undefined"
+        );
+
         const filename = weekFiles[timeIndex]; // File corresponding to the current timeIndex
-        const dataStatus = document.getElementById("data-status");
+        // const dataStatus = document.getElementById("data-status");
 
         try {
-          // Check if the file has already been uploaded
+          /* Check if the file has already been uploaded
           if (uploadedFiles[filename]) {
             debugLog(
               `Using uploaded file ${filename} for time index ${timeIndex}`
@@ -1155,10 +1208,10 @@
             }`;
             return null; // File does not need to be reloaded or reprocessed
           }
-
+          */
           // Show loading state
           showLoading(true);
-          dataStatus.textContent = `Loading data from ${filename}...`;
+          // dataStatus.textContent = `Loading data from ${filename}...`;
 
           // Fetch the file using the Fetch API
           const response = await fetch(`./data/${filename}`);
@@ -1176,7 +1229,7 @@
           const workbook = XLSX.read(data, { type: "array" });
 
           // Update status
-          dataStatus.textContent = `Data loaded from ${filename}`;
+          // dataStatus.textContent = `Data loaded from ${filename}`;
           debugLog(`Successfully loaded workbook for time index ${timeIndex}`);
 
           return workbook;
@@ -1186,10 +1239,11 @@
             `Error loading Excel file for time index ${timeIndex}:`,
             error
           );
+          /*
           if (dataStatus) {
             dataStatus.textContent = `Error loading data for ${filename}: ${error.message}`;
           }
-
+          */
           // Return null to indicate the file could not be processed
           return null;
         } finally {
@@ -1197,6 +1251,389 @@
           showLoading(false);
         }
       } // end of loadExcelFile
+
+      function parseOrgStructure(sheet) {
+        console.log("parseOrgStructure: Starting org structure parsing...");
+        console.log("parseOrgStructure: Raw sheet data:", sheet);
+
+        if (!sheet) {
+          console.error(
+            "parseOrgStructure: Organizational Structure sheet is missing!"
+          );
+          return {};
+        }
+
+        // Convert sheet to JSON, reading rows as raw arrays
+        const rows = XLSX.utils.sheet_to_json(sheet, {
+          defval: null,
+          header: 1, // Read as raw rows
+        });
+
+        console.log("parseOrgStructure: Raw rows from sheet:", rows);
+
+        // **DYNAMIC HEADER ROW DETECTION**
+        let headerRowIndex = -1;
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          if (
+            row.includes("ID") &&
+            row.includes("Parent_ID") &&
+            row.includes("Name")
+          ) {
+            headerRowIndex = i;
+            break;
+          }
+        }
+
+        if (headerRowIndex === -1) {
+          console.error(
+            "parseOrgStructure: Could not find a valid header row!"
+          );
+          return {};
+        }
+
+        const headers = rows[headerRowIndex];
+        console.log("parseOrgStructure: Extracted headers:", headers);
+
+        // **HEADER VALIDATION AND NORMALIZATION**
+        if (!headers || headers.length === 0) {
+          console.error("parseOrgStructure: Header row is empty or invalid!");
+          return {};
+        }
+
+        const normalizedHeaders = headers.map((header) => {
+          if (typeof header === "string") {
+            return header.trim().toLowerCase();
+          } else {
+            console.warn("parseOrgStructure: Skipping invalid header:", header);
+            return null;
+          }
+        });
+
+        console.log(
+          "parseOrgStructure: Normalized headers:",
+          normalizedHeaders
+        );
+
+        const idIndex = normalizedHeaders.indexOf("id");
+        const parentIdIndex = normalizedHeaders.indexOf("parent_id");
+        const nameIndex = normalizedHeaders.indexOf("name");
+        const levelIndex = normalizedHeaders.indexOf("level");
+
+        if (idIndex === -1 || parentIdIndex === -1 || nameIndex === -1) {
+          console.error(
+            "parseOrgStructure: Missing required columns (ID, Parent_ID, Name) in sheet headers!"
+          );
+          return {};
+        }
+
+        const orgStructure = {};
+
+        // **PROCESS DATA ROWS**
+        rows.slice(headerRowIndex + 1).forEach((row) => {
+          const id = row[idIndex] ? String(row[idIndex]).trim() : null;
+          const parentId = row[parentIdIndex]
+            ? String(row[parentIdIndex]).trim()
+            : null;
+          const name = row[nameIndex] ? String(row[nameIndex]).trim() : null;
+          const level = row[levelIndex]
+            ? parseInt(row[levelIndex], 10) || 0
+            : 0;
+
+          if (!id) {
+            console.warn(
+              "parseOrgStructure: Skipping row with missing ID:",
+              row
+            );
+            return;
+          }
+
+          orgStructure[id] = {
+            id,
+            level,
+            name,
+            parentId,
+            children: [],
+          };
+
+          // console.log(`parseOrgStructure: Added org unit with ID=${id}, Parent_ID=${parentId}`);
+        });
+
+        // **LINK CHILDREN TO PARENTS**
+        Object.keys(orgStructure).forEach((id) => {
+          const unit = orgStructure[id];
+          if (unit.parentId && orgStructure[unit.parentId]) {
+            orgStructure[unit.parentId].children.push(unit);
+          }
+        });
+
+        console.log("parseOrgStructure: Parsed orgStructure:", orgStructure);
+
+        // **VERIFY ROOT NODE**
+        if (!orgStructure["1"] || !orgStructure["1"].name) {
+          console.error(
+            "parseOrgStructure: Root node (ID=1) is undefined or missing a Name!"
+          );
+        } else {
+          console.log("parseOrgStructure: Root node:", orgStructure["1"]);
+          console.log(
+            "Org Unit IDs in Org Structure:",
+            Object.keys(orgStructure)
+          );
+        }
+
+        return orgStructure;
+      } // eof parseOrgStructure
+
+      function parseRisks(sheet, orgStructure) {
+        console.log("parseRisks: Starting risk parsing...");
+
+        if (!sheet) {
+          console.error("parseRisks: Risks sheet is missing!");
+          return [];
+        }
+
+        // Convert the sheet into rows
+        const rows = XLSX.utils.sheet_to_json(sheet, {
+          defval: null,
+          header: 1, // Read as raw rows
+        });
+
+        console.log("parseRisks: Raw rows from sheet:", rows);
+
+        // Extract and validate headers
+        const headers = rows[0];
+        if (!headers || headers.length === 0) {
+          console.error("parseRisks: Header row is empty or missing!");
+          return [];
+        }
+
+        // Normalize headers
+        const normalizedHeaders = headers.map((header) => {
+          if (typeof header === "string") {
+            return header.trim().toLowerCase();
+          } else {
+            console.warn("parseRisks: Skipping invalid header:", header);
+            return null;
+          }
+        });
+
+        // Map column names to their indexes
+        const orgUnitIdIndex = normalizedHeaders.indexOf("org_unit_id");
+        const riskIdIndex = normalizedHeaders.indexOf("risk_id");
+        const titleIndex = normalizedHeaders.indexOf("title");
+        const descriptionIndex = normalizedHeaders.indexOf("description");
+        const typeIndex = normalizedHeaders.indexOf("type");
+        const categoryIndex = normalizedHeaders.indexOf("category");
+        const ownerIndex = normalizedHeaders.indexOf("owner");
+        const levelIndex = normalizedHeaders.indexOf("level");
+        const priorityIndex = normalizedHeaders.indexOf("priority");
+        const velocityIndex = normalizedHeaders.indexOf("velocity");
+        const magnitudeIndex = normalizedHeaders.indexOf("magnitude");
+        const assetIdIndex = normalizedHeaders.indexOf("asset_id");
+        const mitigationPlanIndex =
+          normalizedHeaders.indexOf("mitigation_plan");
+
+        // Validate required columns
+        if (orgUnitIdIndex === -1 || riskIdIndex === -1 || titleIndex === -1) {
+          console.error(
+            "parseRisks: Missing required columns in sheet headers!"
+          );
+          return [];
+        }
+
+        const risks = []; // Final risks array
+
+        // Process each row (skip the header row)
+        rows.slice(1).forEach((row) => {
+          const orgUnitId = row[orgUnitIdIndex];
+          if (!orgUnitId || !orgStructure[orgUnitId]) {
+            console.warn(
+              "parseRisks: Skipping row with missing or invalid Org_Unit_ID:",
+              row
+            );
+            return;
+          }
+
+          // Extract all relevant fields
+          const riskId = row[riskIdIndex];
+          const title = row[titleIndex];
+          const description =
+            descriptionIndex !== -1 ? row[descriptionIndex] || "" : "";
+          const type = typeIndex !== -1 ? row[typeIndex] || "" : "";
+          const category = categoryIndex !== -1 ? row[categoryIndex] || "" : "";
+          const owner = ownerIndex !== -1 ? row[ownerIndex] || "" : "";
+          const level = levelIndex !== -1 ? row[levelIndex] || "" : "";
+          const priority = priorityIndex !== -1 ? row[priorityIndex] || "" : "";
+          const velocity = velocityIndex !== -1 ? row[velocityIndex] || "" : "";
+          const magnitude =
+            magnitudeIndex !== -1 ? row[magnitudeIndex] || "" : "";
+          const assetId = assetIdIndex !== -1 ? row[assetIdIndex] || "" : "";
+          const mitigationPlan =
+            mitigationPlanIndex !== -1 ? row[mitigationPlanIndex] || "" : "";
+
+          // Construct the risk object
+          const risk = {
+            riskId,
+            title,
+            description,
+            type,
+            category,
+            owner,
+            level,
+            priority,
+            velocity,
+            magnitude,
+            assetId,
+            mitigationPlan,
+            orgUnitId: String(orgUnitId),
+          };
+
+          console.log(
+            `parseRisks: Assigning risk ${risk.riskId} to Org Unit ID ${orgUnitId}`
+          );
+          // Add the risk to the array
+          risks.push(risk);
+        });
+
+        console.log("parseRisks: Final risks array:", risks);
+        console.log(
+          "Org Unit IDs in Risks:",
+          risks.map((risk) => risk.orgUnitId)
+        );
+        return risks;
+      } // end of parseRisks
+
+      function parseAssets(sheet, orgStructure) {
+        const assets = [];
+        console.info("Assets sheet: ", sheet);
+
+        sheet.forEach((row) => {
+          try {
+            // Extract orgUnitId and normalize it
+            const orgUnitId = row["__EMPTY_1"]
+              ? String(row["__EMPTY_1"]).trim()
+              : null;
+            console.info("Assets: extracted orgUnitId:", orgUnitId);
+
+            // Check if orgUnitId is valid and matches orgStructure
+            if (!orgUnitId) {
+              console.warn("Assets: missing orgUnitId in asset row:", row);
+              return; // Skip this row
+            }
+
+            const orgUnit = orgStructure[orgUnitId];
+            if (!orgUnit) {
+              console.warn(
+                `Assets: no matching orgUnit found for orgUnitId: ${orgUnitId}`
+              );
+              return; // Skip this row
+            }
+
+            console.info("Assets: matching orgUnit in orgStructure:", orgUnit);
+
+            const asset = {
+              id: row["Table 1"],
+              name: row["__EMPTY"],
+              value: row["__EMPTY_2"],
+              orgUnit: orgUnit,
+            };
+
+            assets.push(asset);
+          } catch (error) {
+            console.error("Assets: error parsing row:", row, error);
+          }
+        });
+
+        return assets;
+      } // eof parseAssets
+
+      function processExcelWorkbook(workbook) {
+        console.log("processExcelWorkbook: Starting workbook processing...");
+
+        // Retrieve all sheet names dynamically
+        const sheetNames = workbook.SheetNames;
+        console.log("processExcelWorkbook: Available sheet names:", sheetNames);
+
+        // Initialize placeholders for the sheets we need
+        let assetSheet = null;
+        let orgSheet = null;
+        let risksSheet = null;
+
+        // Match sheet names dynamically
+        sheetNames.forEach((sheetName) => {
+          const lowerName = sheetName.toLowerCase().trim(); // Normalize for comparison
+
+          if (lowerName.includes("asset")) {
+            assetSheet = workbook.Sheets[sheetName];
+            console.log(
+              `processExcelWorkbook: Found Asset sheet: ${sheetName}`
+            );
+          } else if (
+            lowerName.includes("org structure") ||
+            lowerName.includes("organization")
+          ) {
+            orgSheet = workbook.Sheets[sheetName];
+            console.log(
+              `processExcelWorkbook: Found Org Structure sheet: ${sheetName}`
+            );
+          } else if (lowerName.includes("risk")) {
+            risksSheet = workbook.Sheets[sheetName];
+            console.log(
+              `processExcelWorkbook: Found Risks sheet: ${sheetName}`
+            );
+          }
+        });
+
+        // Check if all required sheets were found
+        if (!assetSheet) {
+          console.error("processExcelWorkbook: Asset sheet not found!");
+        }
+        if (!orgSheet) {
+          console.error("processExcelWorkbook: Org Structure sheet not found!");
+        }
+        if (!risksSheet) {
+          console.error("processExcelWorkbook: Risks sheet not found!");
+        }
+
+        // If any sheet is missing, stop further processing
+        if (!assetSheet || !orgSheet || !risksSheet) {
+          console.error(
+            "processExcelWorkbook: One or more required sheets are missing. Stopping processing."
+          );
+          return;
+        }
+
+        // Parse assets data
+        const assetsData = XLSX.utils.sheet_to_json(assetSheet, {
+          defval: null,
+        });
+        console.log("processExcelWorkbook: Raw assets data:", assetsData);
+
+        // Parse organization structure
+        const orgStructure = parseOrgStructure(orgSheet);
+        console.log(
+          "processExcelWorkbook: Parsed Organizational Structure:",
+          orgStructure
+        );
+
+        // Parse risks data
+        const risksData = XLSX.utils.sheet_to_json(risksSheet, {
+          defval: null,
+        });
+        console.log("processExcelWorkbook: Raw Risks data:", risksData);
+
+        const risks = parseRisks(risksSheet, orgStructure);
+        console.log("processExcelWorkbook: Parsed Risks:", risks);
+        currentData.risks = risks;
+
+        // Return the processed data
+        return {
+          assets: assetsData,
+          orgStructure,
+          risks,
+        };
+      }
 
       // Load data for a specific time index and update the visualization
       async function loadDataForTimeIndex(timeIndex) {
@@ -1225,10 +1662,12 @@
             `Error loading data for time index ${timeIndex}:`,
             error
           );
+          /*
           const dataStatus = document.getElementById("data-status");
           if (dataStatus) {
             dataStatus.textContent = `Error loading data: ${error.message}`;
           }
+          */
           showLoading(false);
           return false;
         }
