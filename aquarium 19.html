@@ -400,6 +400,32 @@
         height: 150px; /* Fixed height for chart */
         margin-top: 10px;
       }
+
+      /* Loading indicator */
+      .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+        color: white;
+        font-size: 1.2rem;
+      }
+
+      .spinner {
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top: 4px solid white;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin-right: 10px;
+      }
     </style>
   </head>
   <body class="min-h-screen p-4 transition-colors">
@@ -1181,12 +1207,9 @@
         }
       }
 
-      async function loadExcelFile(timeIndex) {
-        console.log(
-          "DEBUG - Global uploadedFiles exists?",
-          typeof uploadedFiles !== "undefined"
-        );
+      let data = null;
 
+      async function loadExcelFile(timeIndex) {
         const filename = weekFiles[timeIndex]; // File corresponding to the current timeIndex
         // const dataStatus = document.getElementById("data-status");
 
@@ -1217,7 +1240,7 @@
           const response = await fetch(`./data/${filename}`);
           if (!response.ok) {
             throw new Error(
-              `Failed to fetch file: HTTP status ${response.status}`
+              `loadExcelFile: Failed to fetch file: HTTP status ${response.status}`
             );
           }
 
@@ -1230,13 +1253,15 @@
 
           // Update status
           // dataStatus.textContent = `Data loaded from ${filename}`;
-          debugLog(`Successfully loaded workbook for time index ${timeIndex}`);
+          debugLog(
+            `loadExcelFile: Successfully loaded workbook for time index ${timeIndex}`
+          );
 
           return workbook;
         } catch (error) {
           // Handle errors gracefully and inform the user
           console.error(
-            `Error loading Excel file for time index ${timeIndex}:`,
+            `loadExcelFile: Error loading Excel file for time index ${timeIndex}:`,
             error
           );
           /*
@@ -1625,7 +1650,6 @@
 
         const risks = parseRisks(risksSheet, orgStructure);
         console.log("processExcelWorkbook: Parsed Risks:", risks);
-        currentData.risks = risks;
 
         // Return the processed data
         return {
@@ -1633,6 +1657,50 @@
           orgStructure,
           risks,
         };
+      }
+
+      // Switch to the data for a specific time index
+      function switchToTimeIndex(timeIndex) {
+        try {
+          if (!timeIndexedData[timeIndex]) {
+            debugLog(`No data for timeIndex ${timeIndex}`);
+            return false;
+          }
+
+          data = timeIndexedData[timeIndex];
+          currentLoadedTimeIndex = timeIndex;
+
+          // Keep your excellent debug logging
+          debugLog(
+            "Switched to time index",
+            timeIndex,
+            "with risks:",
+            data.risks?.length
+          );
+
+          // Maintain your UI updates
+          updateTimeLabel(timeIndex); // Could extract this if reused
+          updateDataStatus(timeIndex);
+
+          return true;
+        } catch (error) {
+          debugLog("Switch failed:", error);
+          return false;
+        }
+      }
+
+      // Extracted helper
+      function updateTimeLabel(timeIndex) {
+        if (!timeLabel) return;
+
+        const labels = {
+          0: "4 weeks ago",
+          1: "3 weeks ago",
+          2: "2 weeks ago",
+          3: "1 week ago",
+          4: "Current",
+        };
+        timeLabel.textContent = labels[timeIndex] || `Time ${timeIndex}`;
       }
 
       // Load data for a specific time index and update the visualization
@@ -1648,6 +1716,10 @@
           // Try to load the Excel file
           const workbook = await loadExcelFile(timeIndex);
           if (workbook) {
+            console.log(
+              `loadDataForTimeIndex: Loaded timeIndex ${timeIndex} data:`,
+              timeIndexedData[timeIndex]
+            );
             // Process the workbook and store the data
             const processedData = processExcelWorkbook(workbook);
             timeIndexedData[timeIndex] = processedData;
@@ -1676,22 +1748,45 @@
       // Initialize data
       // const data = generateRisksData();
       // Replace original `data = generateRisksData()` with:
+
       async function initializeData() {
         showLoading(true);
         try {
-          // Load all weekly files (0-4) upfront or on-demand
-          const loaded = await loadDataForTimeIndex(4); // Start with "Current" (week_00.xlsx)
-          if (!loaded) throw new Error("Failed to load initial data");
+          // 1. Load current week first
+          await loadDataForTimeIndex(4);
 
-          // Optional: Preload other weeks in background
-          [3, 2, 1, 0].forEach((t) => loadDataForTimeIndex(t));
-        } catch (error) {
-          console.error("Initialization failed:", error);
-          document.getElementById(
-            "data-status"
-          ).textContent = `Error: ${error.message}`;
+          // 2. Set up lazy loading for others
+          setupLazyLoading();
+
+          // 3. Initialize UI
+          setOrgLevel(0);
         } finally {
           showLoading(false);
+        }
+      } // eof initializeData
+
+      // New lazy loading handler
+      function setupLazyLoading() {
+        // Load adjacent weeks when idle
+        const loadAdjacentWeeks = debounce(() => {
+          const current = parseInt(timeSlider.value);
+          [current - 1, current + 1].forEach((t) => {
+            if (t >= 0 && t <= 4 && !timeIndexedData[t]) {
+              loadDataForTimeIndex(t);
+            }
+          });
+        }, 500);
+
+        // Trigger on slider movement
+        timeSlider.addEventListener("input", loadAdjacentWeeks);
+
+        // Simple debounce helper
+        function debounce(fn, delay) {
+          let timeout;
+          return (...args) => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => fn(...args), delay);
+          };
         }
       }
 
@@ -2044,13 +2139,22 @@
         });
       }
 
-      // Calculate aggregated risk metrics for an organization entity
+      /* Calculate aggregated risk metrics for an organization entity
       function calculateAggregatedRiskMetrics(
         entityType,
         entityName,
         parentEntityName,
         timeIndex
       ) {
+        // Add guard clause
+        if (!timeIndexedData[timeIndex]?.risks) {
+          console.error(
+            `calculateAggregatedRiskMetrics: No data for timeIndex ${timeIndex}`,
+            timeIndexedData
+          );
+          return { priority: 1, velocity: 1, magnitude: 1, count: 0 };
+        }
+
         let entityRisks = [];
 
         // IMPROVED IMPLEMENTATION: Get all relevant risks for each entity level
@@ -2116,6 +2220,89 @@
         });
 
         // Return average values, weighted by risk count
+        return {
+          priority: totalPriority / entityRisks.length,
+          velocity: totalVelocity / entityRisks.length,
+          magnitude: totalMagnitude / entityRisks.length,
+          count: entityRisks.length,
+        };
+      }
+      */
+
+      // Helper to filter risks (extracted for clarity)
+      function getRelevantRisks(entityType, entityName, parentEntityName) {
+        if (!data?.risks) return [];
+
+        return data.risks.filter((risk) => {
+          switch (entityType) {
+            case "organization":
+              return (
+                risk.level === "organization" && risk.entity === entityName
+              );
+
+            case "division":
+              return (
+                (risk.level === "division" && risk.entity === entityName) ||
+                (risk.level === "department" &&
+                  risk.parentEntity === entityName) ||
+                (risk.level === "businessUnit" &&
+                  risk.grandparentEntity === entityName)
+              );
+
+            case "department":
+              return (
+                (risk.level === "department" &&
+                  risk.entity === entityName &&
+                  risk.parentEntity === parentEntityName) ||
+                (risk.level === "businessUnit" &&
+                  risk.parentEntity === entityName &&
+                  risk.grandparentEntity === parentEntityName)
+              );
+
+            case "businessUnit":
+              return (
+                risk.level === "businessUnit" && risk.entity === entityName
+              );
+
+            default:
+              return false;
+          }
+        });
+      }
+
+      function calculateAggregatedRiskMetrics(
+        entityType,
+        entityName,
+        parentEntityName,
+        timeIndex
+      ) {
+        const entityRisks = getRelevantRisks(
+          entityType,
+          entityName,
+          parentEntityName
+        );
+
+        if (!entityRisks.length) {
+          return { priority: 1, velocity: 1, magnitude: 1, count: 0 };
+        }
+
+        let totalPriority = 0;
+        let totalVelocity = 0;
+        let totalMagnitude = 0;
+
+        entityRisks.forEach((risk) => {
+          // Handle both timeData and flat formats
+          const metrics = risk.timeData?.[timeIndex] || {
+            priority: risk.priority,
+            velocity: risk.velocity,
+            magnitude: risk.magnitude,
+          };
+
+          totalPriority += metrics.priority;
+          totalVelocity += metrics.velocity;
+          totalMagnitude += metrics.magnitude;
+        });
+
         return {
           priority: totalPriority / entityRisks.length,
           velocity: totalVelocity / entityRisks.length,
@@ -2487,8 +2674,21 @@
 
       // Update aquarium based on selected time and organization level
       function updateAquarium() {
-        const timeIndex = parseInt(timeSlider.value);
-        const orgLevel = parseInt(orgSlider.value);
+        if (!window.data) {
+          window.data = { orgStructure: {}, risks: [] };
+          console.warn("updateAquarium: Created fallback data structure");
+        }
+
+        const timeIndex = parseInt(timeSlider?.value || 4);
+        const orgLevel = parseInt(orgSlider?.value || 0);
+
+        // Validate data exists
+        if (!timeIndexedData[timeIndex]?.risks) {
+          console.warn(
+            `updateAquarium: Waiting for timeIndex ${timeIndex} data...`
+          );
+          return; // Will retry when data loads
+        }
 
         // Clear existing bubbles
         document
@@ -2500,7 +2700,7 @@
         const { risks, orgStructure } = currentData;
 
         if (!risks || !orgStructure) {
-          console.warn(`No data for timeIndex=${timeIndex}`);
+          console.warn(`updateAquarium: No data for timeIndex=${timeIndex}`);
           return;
         }
 
