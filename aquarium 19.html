@@ -645,6 +645,16 @@
         MAX_MAGNITUDE: 5,
       };
 
+      const AppState = {
+        current: {
+          timeIndex: 4,
+          orgLevel: 0,
+          risks: [],
+          orgStructure: null,
+        },
+        timeIndexedData: {},
+      };
+
       // Time-indexed data storage - store separate datasets for each time period
       const timeIndexedData = {
         0: null, // 4 weeks ago
@@ -1407,6 +1417,13 @@
           );
         }
 
+        // Add this after building the hierarchy:
+        if (orgStructure["1"]) {
+          orgStructure.organization =
+            orgStructure["1"].name || "Enterprise Operations";
+          orgStructure.abbreviation = orgStructure["1"].abbreviation || "EOps";
+        }
+
         return orgStructure;
       } // eof parseOrgStructure
 
@@ -1530,47 +1547,42 @@
       } // end of parseRisks
 
       function parseAssets(sheet, orgStructure) {
-        const assets = [];
-        console.info("Assets sheet: ", sheet);
-
-        sheet.forEach((row) => {
-          try {
-            // Extract orgUnitId and normalize it
-            const orgUnitId = row["__EMPTY_1"]
-              ? String(row["__EMPTY_1"]).trim()
-              : null;
-            console.info("Assets: extracted orgUnitId:", orgUnitId);
-
-            // Check if orgUnitId is valid and matches orgStructure
-            if (!orgUnitId) {
-              console.warn("Assets: missing orgUnitId in asset row:", row);
-              return; // Skip this row
-            }
-
-            const orgUnit = orgStructure[orgUnitId];
-            if (!orgUnit) {
-              console.warn(
-                `Assets: no matching orgUnit found for orgUnitId: ${orgUnitId}`
-              );
-              return; // Skip this row
-            }
-
-            console.info("Assets: matching orgUnit in orgStructure:", orgUnit);
-
-            const asset = {
-              id: row["Table 1"],
-              name: row["__EMPTY"],
-              value: row["__EMPTY_2"],
-              orgUnit: orgUnit,
-            };
-
-            assets.push(asset);
-          } catch (error) {
-            console.error("Assets: error parsing row:", row, error);
-          }
+        // 1. Convert sheet to JSON with YOUR exact column headers
+        const assetRows = XLSX.utils.sheet_to_json(sheet, {
+          defval: null,
+          header: ["Asset_ID", "Asset_name", "Org_Unit_ID", "Asset_value"], // Matches your Excel
+          range: 1, // Skip header row
         });
 
-        return assets;
+        // 2. Process each row with proper field mapping
+        return assetRows.reduce((assets, row) => {
+          try {
+            // Required fields validation
+            if (!row.Asset_ID || !row.Org_Unit_ID || !row.Asset_name) {
+              console.warn("Skipping incomplete asset row:", row);
+              return assets;
+            }
+
+            // Verify org unit exists
+            const orgUnitId = String(row.Org_Unit_ID).trim();
+            if (!orgStructure[orgUnitId]) {
+              console.warn(
+                `Skipping asset - invalid Org_Unit_ID: ${orgUnitId}`
+              );
+              return assets;
+            }
+
+            assets.push({
+              id: String(row.Asset_ID).trim(),
+              name: String(row.Asset_name).trim(),
+              value: parseFloat(String(row.Asset_value).replace(/,/g, "")), // Handle currency format
+              orgUnitId: orgUnitId,
+            });
+          } catch (error) {
+            console.error("Error processing asset row:", row, error);
+          }
+          return assets;
+        }, []);
       } // eof parseAssets
 
       function processExcelWorkbook(workbook) {
@@ -1667,24 +1679,25 @@
             return false;
           }
 
-          data = timeIndexedData[timeIndex];
-          currentLoadedTimeIndex = timeIndex;
-
-          // Keep your excellent debug logging
-          debugLog(
-            "Switched to time index",
+          // Update both legacy and new state during transition
+          data = timeIndexedData[timeIndex]; // Legacy compatibility
+          AppState.current = {
+            ...timeIndexedData[timeIndex],
             timeIndex,
-            "with risks:",
-            data.risks?.length
-          );
+            orgLevel: parseInt(orgSlider?.value || 0), // Maintain UI sync
+          };
 
-          // Maintain your UI updates
-          updateTimeLabel(timeIndex); // Could extract this if reused
+          debugLog("Switched to time index", timeIndex, {
+            risks: AppState.current.risks?.length,
+            org: AppState.current.orgStructure?.organization,
+          });
+
+          updateTimeLabel(timeIndex);
           updateDataStatus(timeIndex);
 
           return true;
         } catch (error) {
-          debugLog("Switch failed:", error);
+          debugLog("Switch failed:", error, { timeIndex, timeIndexedData });
           return false;
         }
       }
@@ -1748,7 +1761,7 @@
       // Initialize data
       // const data = generateRisksData();
       // Replace original `data = generateRisksData()` with:
-
+      /*
       async function initializeData() {
         showLoading(true);
         try {
@@ -1764,6 +1777,7 @@
           showLoading(false);
         }
       } // eof initializeData
+      */
 
       // New lazy loading handler
       function setupLazyLoading() {
@@ -1790,8 +1804,148 @@
         }
       }
 
+      /*
+      async function loadWeekData(timeIndex) {
+        const filename = weekFiles[timeIndex];
+        if (!filename) {
+          debugLog(
+            `loadWeekData: No filename mapped for timeIndex ${timeIndex}`
+          );
+          throw new Error(`loadWeekData: Invalid time index: ${timeIndex}`);
+        }
+
+        try {
+          showLoading(true);
+          debugLog(`loadWeekData: Loading week ${timeIndex} from ${filename}`);
+
+          // 1. Fetch and parse Excel file
+          const response = await fetch(`./data/${filename}`);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status} loading ${filename}`);
+          }
+
+          const arrayBuffer = await response.arrayBuffer();
+          const workbook = XLSX.read(new Uint8Array(arrayBuffer), {
+            type: "array",
+          });
+
+          // 2. Process sheets with validation
+          const assetsSheet = workbook.Sheets["Assets"];
+          const orgSheet = workbook.Sheets["Org Structure"];
+          const risksSheet = workbook.Sheets["Risks"];
+
+          if (!orgSheet || !risksSheet) {
+            throw new Error(`Missing required sheets in ${filename}`);
+          }
+
+          // 3. Parse data
+          const orgStructure = parseOrgStructure(orgSheet);
+          const risks = parseRisks(risksSheet, orgStructure);
+          const assets = parseAssets(assetsSheet, orgStructure);
+
+          debugLog(`Loaded week ${timeIndex}`, {
+            riskCount: risks.length,
+            assetCount: assets.length,
+            orgUnits: Object.keys(orgStructure).length,
+          });
+
+          return {
+            assets: assets,
+            orgStructure: orgStructure,
+            risks: risks,
+          };
+        } catch (error) {
+          console.error(
+            `loadWeekData: failed for timeIndex ${timeIndex}:`,
+            error
+          );
+          return null; // Explicit null instead of undefined
+        }
+      } */
+
+      async function loadWeekData(timeIndex) {
+        try {
+          // 1. Load raw Excel file
+          const workbook = await loadExcelFile(timeIndex);
+          if (!workbook) throw new Error("No workbook returned");
+
+          // 2. Extract sheets (with validation)
+          const assetsSheet = workbook.Sheets["Assets"];
+          const orgSheet = workbook.Sheets["Org Structure"];
+          const risksSheet = workbook.Sheets["Risks"];
+
+          if (!orgSheet || !risksSheet) {
+            throw new Error("Missing required sheets in workbook");
+          }
+
+          // 3. Process data
+          const orgStructure = parseOrgStructure(orgSheet);
+          const risks = parseRisks(risksSheet, orgStructure);
+          const assets = assetsSheet
+            ? parseAssets(assetsSheet, orgStructure)
+            : [];
+
+          // 4. Update state systems
+          const processedData = {
+            assets,
+            orgStructure,
+            risks,
+          };
+
+          timeIndexedData[timeIndex] = processedData;
+          AppState.current = {
+            ...processedData,
+            timeIndex,
+            orgLevel: parseInt(orgSlider?.value || 0),
+          };
+
+          debugLog(`Loaded week ${timeIndex}`, {
+            risks: risks.length,
+            assets: assets.length,
+            orgUnits: Object.keys(orgStructure).length,
+          });
+
+          return processedData;
+        } catch (error) {
+          console.error(`loadWeekData(${timeIndex}) failed:`, error);
+          throw error;
+        }
+      } // eof loadWeekData
+
+      // Proposed (more accurate naming)
+      async function initRiskVisualization() {
+        try {
+          // Load current week (timeIndex 4)
+          AppState.timeIndexedData[4] = await loadWeekData(4);
+
+          if (!AppState.timeIndexedData[4]) {
+            throw new Error("Failed to load initial week data");
+          }
+
+          // Initialize state
+          AppState.current = {
+            ...AppState.timeIndexedData[4],
+            timeIndex: 4,
+            orgLevel: 0,
+          };
+
+          // UI setup
+          orgSlider.value = 0;
+          timeSlider.value = 4;
+
+          debugLog("Initialization complete", AppState.current);
+        } catch (error) {
+          console.error("Initialization failed:", error);
+          document.getElementById(
+            "data-status"
+          ).textContent = `Error: ${error.message}`;
+        } finally {
+          showLoading(false);
+        }
+      }
+
       // Call this instead of `generateRisksData()`
-      initializeData().then(() => updateAquarium());
+      initRiskVisualization().then(() => updateAquarium());
 
       const aquarium = document.getElementById("aquarium");
       const tooltip = document.getElementById("tooltip");
@@ -2233,7 +2387,7 @@
       function getRelevantRisks(entityType, entityName, parentEntityName) {
         if (!data?.risks) return [];
 
-        return data.risks.filter((risk) => {
+        return AppState.current.risks.filter((risk) => {
           switch (entityType) {
             case "organization":
               return (
@@ -2320,6 +2474,13 @@
         metrics,
         timeIndex
       ) {
+        const orgStructure = AppState.current.orgStructure;
+        const displayName =
+          entityName ||
+          (entityType === "organization"
+            ? orgStructure.abbreviation || orgStructure.organization
+            : "Unnamed Entity");
+
         const bubble = document.createElement("div");
         bubble.classList.add("risk-bubble");
 
@@ -2361,9 +2522,10 @@
         const nameElement = document.createElement("div");
         nameElement.classList.add("fish-id");
         nameElement.textContent =
-          entityName.length > 15
-            ? entityName.substring(0, 12) + "..."
-            : entityName;
+          displayName.length > 15
+            ? displayName.substring(0, 12) + "..."
+            : displayName;
+
         bubble.appendChild(nameElement);
 
         // Add tooltip on hover
@@ -2477,10 +2639,10 @@
         let entityRisks = [];
         if (entityType === "organization") {
           // For the organization view, show all risks from all levels
-          entityRisks = data.risks;
+          entityRisks = AppState.current.risks;
         } else if (entityType === "division") {
           // For divisions, show all risks from this division and below
-          entityRisks = data.risks.filter(
+          entityRisks = AppState.current.risks.filter(
             (risk) =>
               (risk.level === "division" && risk.entity === entityName) ||
               (risk.level === "department" &&
@@ -2490,7 +2652,7 @@
           );
         } else if (entityType === "department") {
           // For departments, show all risks from this department and below
-          entityRisks = data.risks.filter(
+          entityRisks = AppState.current.risks.filter(
             (risk) =>
               (risk.level === "department" &&
                 risk.entity === entityName &&
@@ -2501,7 +2663,7 @@
           );
         } else if (entityType === "businessUnit") {
           // For BUs, show only this BU's risks
-          entityRisks = data.risks.filter(
+          entityRisks = AppState.current.risks.filter(
             (risk) =>
               risk.level === "businessUnit" && risk.entity === entityName
           );
@@ -2674,9 +2836,15 @@
 
       // Update aquarium based on selected time and organization level
       function updateAquarium() {
-        if (!window.data) {
-          window.data = { orgStructure: {}, risks: [] };
-          console.warn("updateAquarium: Created fallback data structure");
+        if (!AppState.current?.risks) {
+          const statusEl = document.getElementById("data-status");
+          if (statusEl) {
+            statusEl.textContent = `Loading week ${
+              AppState.current?.timeIndex ?? 4
+            }...`;
+          }
+          debugLog("updateAquarium: Waiting for data", AppState.current);
+          return;
         }
 
         const timeIndex = parseInt(timeSlider?.value || 4);
@@ -2697,10 +2865,13 @@
 
         // Use Excel-loaded data (timeIndexedData) instead of generateRisksData()
         const currentData = timeIndexedData[timeIndex] || {};
-        const { risks, orgStructure } = currentData;
 
+        const { risks, orgStructure } = AppState.current;
         if (!risks || !orgStructure) {
-          console.warn(`updateAquarium: No data for timeIndex=${timeIndex}`);
+          console.debug(
+            "updateAquarium: Waiting for data...",
+            AppState.current
+          );
           return;
         }
 
@@ -2754,25 +2925,32 @@
         }
 
         if (orgLevel === 0) {
+          if (!AppState.current?.orgStructure) {
+            console.warn("updateAquarium: No orgStructure available");
+            return;
+          }
+
           // Organization level - show a single bubble for the whole organization
           const orgMetrics = calculateAggregatedRiskMetrics(
             "organization",
-            data.orgStructure.organization,
+            AppState.current.orgStructure.organization,
             null,
             timeIndex
           );
+
           const orgBubble = createEntityBubble(
             "organization",
-            data.orgStructure.organization,
+            AppState.current.orgStructure.organization,
             null,
             null,
             orgMetrics,
             timeIndex
           );
+
           aquarium.appendChild(orgBubble);
         } else if (orgLevel === 1) {
           // Division level - show one bubble per division
-          data.orgStructure.divisions.forEach((division) => {
+          AppState.current.orgStructure.divisions.forEach((division) => {
             const divisionMetrics = calculateAggregatedRiskMetrics(
               "division",
               division.name,
@@ -2791,7 +2969,7 @@
           });
         } else if (orgLevel === 2) {
           // Department level
-          data.orgStructure.divisions.forEach((division) => {
+          AppState.current.orgStructure.divisions.forEach((division) => {
             // If a division is selected, only show departments from that division
             if (selectedDivision && division.name !== selectedDivision) return;
 
@@ -2815,7 +2993,7 @@
           });
         } else if (orgLevel === 3) {
           // Business Unit level
-          data.orgStructure.divisions.forEach((division) => {
+          AppState.current.orgStructure.divisions.forEach((division) => {
             // If a division is selected, only consider that division
             if (selectedDivision && division.name !== selectedDivision) return;
 
@@ -2849,7 +3027,7 @@
 
           if (selectedDepartment && selectedDivision) {
             // If department is selected, show risks for that department and its BUs
-            data.risks.forEach((risk) => {
+            AppState.current.risks.forEach((risk) => {
               if (
                 (risk.level === "department" &&
                   risk.entity === selectedDepartment &&
@@ -2863,7 +3041,7 @@
             });
           } else if (selectedDivision) {
             // If only division is selected, show risks for that division and its departments/BUs
-            data.risks.forEach((risk) => {
+            AppState.current.risks.forEach((risk) => {
               if (
                 (risk.level === "division" &&
                   risk.entity === selectedDivision) ||
@@ -2877,7 +3055,7 @@
             });
           } else {
             // Otherwise show all risks
-            risksToShow.push(...data.risks);
+            risksToShow.push(...AppState.current.risks);
           }
 
           // Create and add risk bubbles
